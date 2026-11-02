@@ -1,0 +1,1 @@
+ALTER TABLE "hub_account" ADD COLUMN "mailAccess" boolean DEFAULT false NOT NULL;

@@ -85,6 +85,16 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 - **发信用 Hub 自己的变量。** `mail/` 只认 `HUB_RESEND_API_KEY`（以及可选的 `HUB_MAIL_FROM`、`HUB_MAIL_REPLY_TO`）。Kan 读的是 `SMTP_*` 和 `EMAIL_FROM`，设了会打开 Kan 自己的邀请和魔法链接邮件，绕过注册闸门，所以不用那几个名字。没设 key 时什么都不发，页面说明原因。
 - **在 Supabase 表格里直接改状态不会触发**，因为那不经过 Hub。这类录取，以及只有「名单」的人改的、配好发信之前录取的，用命令行 `mail-links` 补发（`site.service.ts` 的 `mailAcceptedApplicants`）：它扫一遍「已录取」，只给从没发过链接、也没注册的地址发，同一个地址只发一封，两封之间隔 0.6 秒（Resend 每秒最多两封），所以可以反复跑。链接过期的人只列出来不重发，重发要 `--email` 点名，这时和卡片上的「重发」一样会替换旧链接。命令行以所有者身份发许可，日志的操作人记为 `cli`。
 
+### 邮箱
+
+后台 → 官网 → 邮箱（`/admin/site/inbox`）读 Resend 收到的信，代码在 `packages/hub/src/inbox/`。
+
+- **不存信。** 列表和正文每次都从 Resend 的 `/emails/receiving` 现取（`inbox.resend.ts`），Hub 没有表、没有 webhook。Resend 删了的（免费版 30 天）这里也就没了。翻页用 Resend 的游标（`after` = 上一页最后一封的 id），所以只有「较新 / 较旧」，没有页码。
+- **权限是 `hub_account.mailAccess`**，和 `siteAccess` 一样由所有者逐人设置，和后台角色、官网权限都无关。`hubInboxProcedure` 先查它和 key，用例里再查一次；附件路由不走 tRPC，自己查一遍。
+- **单独的 key。** 读收件要 Full access，发信用的 `HUB_RESEND_API_KEY` 应该只有 Sending access，所以邮箱用 `HUB_RESEND_INBOX_API_KEY`。
+- **HTML 的隔离**都在 `inbox.policy.ts`（浏览器和测试共用）：`MAIL_FRAME_SANDBOX` 不含 `allow-scripts` 和 `allow-same-origin`；`mailFrameDocument` 把我们的 CSP 放在信的前面（信里自带的 CSP 只能更严），去掉 `meta refresh`，远程图片要点了才放开。
+- **附件**的下载链接会过期，页面链到 `/api/hub/inbox/<信>/attachments/<附件>`，点的时候才向 Resend 要新链接，再 302 过去。带 content id 的内嵌图片已经显示在正文里，不列为附件。
+
 ## 首页与大看板
 
 `packages/hub/src/tasks/` 负责首页（`/home`）和跨项目大看板（`/tasks/<视图>`）。两者都有一个「范围」：「全部」或某一个项目，写在 URL 的 `?project=` 里。

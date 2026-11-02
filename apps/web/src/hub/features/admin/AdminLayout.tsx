@@ -8,7 +8,7 @@ import type {
   SiteAccess,
   SitePermission,
 } from "@kan/hub/public";
-import { can, canOnSite, roleLabels } from "@kan/hub/public";
+import { can, canOnSite, canReadMail, roleLabels } from "@kan/hub/public";
 
 import { PageHead } from "~/components/PageHead";
 import { copy } from "~/hub/copy/zh";
@@ -18,8 +18,18 @@ import { api } from "~/utils/api";
 
 const text = copy.admin;
 
-/** A back-office page needs a back-office permission or a website one. */
-type PageAccess = { permission: HubPermission } | { site: SitePermission };
+/** A back-office page needs a back-office permission, a website one, or mailbox access. */
+type PageAccess =
+  | { permission: HubPermission }
+  | { site: SitePermission }
+  | { mail: true };
+
+/** What the signed-in person may open; mirrors `hub.me.get`. */
+interface Access {
+  role: HubRole | null;
+  siteAccess: SiteAccess | null;
+  mailAccess: boolean;
+}
 
 interface NavItem {
   href: string;
@@ -27,14 +37,12 @@ interface NavItem {
   access: PageAccess;
 }
 
-const allows = (
-  access: PageAccess,
-  role: HubRole | null,
-  siteAccess: SiteAccess | null,
-) =>
-  "site" in access
-    ? canOnSite(siteAccess, access.site)
-    : can(role, access.permission);
+const allows = (access: PageAccess, me: Access) =>
+  "mail" in access
+    ? canReadMail(me.mailAccess)
+    : "site" in access
+      ? canOnSite(me.siteAccess, access.site)
+      : can(me.role, access.permission);
 
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
@@ -125,6 +133,11 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         label: text.site.joins.title,
         access: { site: "site.people" },
       },
+      {
+        href: "/admin/site/inbox",
+        label: text.site.inbox.title,
+        access: { mail: true },
+      },
     ],
   },
 ];
@@ -140,25 +153,41 @@ const isActive = (pathname: string, href: string) =>
  * current page and the signed-in person's role, and the page itself.
  *
  * The page is only rendered for those it is meant for: back-office members,
- * or on 官网 pages (`site`) those with website access. That is for clarity,
- * not security: every `hub.*` procedure checks permissions on the server.
+ * on 官网 pages (`site`) those with website access, and on the mailbox page
+ * (`mail`) those with mailbox access. That is for clarity, not security:
+ * every `hub.*` procedure checks permissions on the server.
  */
 export function AdminLayout({
   title,
   site,
+  mail,
   children,
 }: {
   title: string;
   /** Makes this a 官网 page that needs this website permission. */
   site?: SitePermission;
+  /** Makes this the mailbox page, which needs mailbox access. */
+  mail?: boolean;
   children: React.ReactNode;
 }) {
   const { pathname } = useRouter();
   const me = api.hub.me.get.useQuery(undefined, { retry: false });
   const role = me.data?.role ?? null;
-  const siteAccess = me.data?.siteAccess ?? null;
-  const pageAccess: PageAccess = site ? { site } : { permission: "admin.view" };
-  const denied = site ? text.site.noAccess : text.denied;
+  const access: Access = {
+    role,
+    siteAccess: me.data?.siteAccess ?? null,
+    mailAccess: me.data?.mailAccess ?? false,
+  };
+  const pageAccess: PageAccess = mail
+    ? { mail: true }
+    : site
+      ? { site }
+      : { permission: "admin.view" };
+  const denied = mail
+    ? text.site.inbox.noAccess
+    : site
+      ? text.site.noAccess
+      : text.denied;
 
   const currentLabel =
     NAV_GROUPS.flatMap((group) => group.items).find((item) =>
@@ -171,7 +200,7 @@ export function AdminLayout({
       <div className="flex min-h-screen bg-light-100 text-light-1000 dark:bg-dark-50 dark:text-dark-1000">
         <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-light-300 bg-light-100 px-3 py-4 dark:border-dark-300 dark:bg-dark-100 md:flex">
           <Link
-            href={adminHome(role)}
+            href={adminHome(access)}
             className="px-2 text-[15px] font-bold tracking-tight"
           >
             {copy.brand}
@@ -182,7 +211,7 @@ export function AdminLayout({
           <nav className="mt-6 flex-1 space-y-5">
             {NAV_GROUPS.map((group) => {
               const items = group.items.filter((item) =>
-                allows(item.access, role, siteAccess),
+                allows(item.access, access),
               );
               if (items.length === 0) return null;
               return (
@@ -236,7 +265,7 @@ export function AdminLayout({
               <p className="text-sm text-light-900 dark:text-dark-900">
                 {text.loading}
               </p>
-            ) : allows(pageAccess, role, siteAccess) ? (
+            ) : allows(pageAccess, access) ? (
               children
             ) : (
               <div className="max-w-md">

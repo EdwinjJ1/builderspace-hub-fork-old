@@ -45,6 +45,13 @@ function AccountDetail({ userId }: { userId: string }) {
       await utils.hub.me.get.invalidate();
     },
   });
+  const setMailAccess = api.hub.accounts.setMailAccess.useMutation({
+    onSuccess: async () => {
+      await refresh();
+      // Granting it to oneself opens the mailbox page right away.
+      await utils.hub.me.get.invalidate();
+    },
+  });
   const setProjectRole = api.hub.accounts.setProjectRole.useMutation({
     onSuccess: () =>
       Promise.all([refresh(), utils.hub.departments.directory.invalidate()]),
@@ -77,6 +84,7 @@ function AccountDetail({ userId }: { userId: string }) {
     rename.error ??
     setRole.error ??
     setSiteAccess.error ??
+    setMailAccess.error ??
     setProjectRole.error ??
     resetPassword.error ??
     suspend.error ??
@@ -189,6 +197,23 @@ function AccountDetail({ userId }: { userId: string }) {
             <option value="">{text.siteNone}</option>
             <option value="people">{siteAccessLabels.people}</option>
             <option value="manage">{siteAccessLabels.manage}</option>
+          </select>
+        </Card>
+
+        <Card title={text.mailHeading} hint={text.mailHint}>
+          <select
+            className={inputClass}
+            value={data.mailAccess ? "read" : ""}
+            disabled={!can(myRole, "admins.manage") || setMailAccess.isPending}
+            onChange={(event) =>
+              setMailAccess.mutate({
+                userId,
+                access: event.target.value === "read",
+              })
+            }
+          >
+            <option value="">{text.mailNone}</option>
+            <option value="read">{text.mailRead}</option>
           </select>
         </Card>
 

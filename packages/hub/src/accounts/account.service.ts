@@ -49,6 +49,7 @@ export interface AccountSummary {
   createdAt: Date;
   role: HubRole | null;
   siteAccess: AccountFacts["siteAccess"];
+  mailAccess: AccountFacts["mailAccess"];
   status: AccountFacts["status"];
   projects: ProjectMembership[];
 }
@@ -381,6 +382,38 @@ export async function setSiteAccess(
       entityId: userId,
       summary: `${user.email} 的官网权限：${label(target.siteAccess)} → ${label(siteAccess)}`,
       detail: { from: target.siteAccess, to: siteAccess },
+    }),
+  );
+}
+
+/**
+ * Lets someone read the club mailbox (hello@), or stops them. Owners only,
+ * for anyone including themselves, like website access: the mail is from
+ * people outside the club and may hold their personal details.
+ */
+export async function setMailAccess(
+  db: Db,
+  actor: AdminActor,
+  userId: string,
+  mailAccess: boolean,
+  now: Date = new Date(),
+): Promise<void> {
+  requirePermission(actor, "admins.manage", "只有所有者能设置邮箱权限");
+  const user = await requireUser(db, userId);
+  const target = await getAccessFacts(db, userId);
+  if (target.mailAccess === mailAccess) return;
+
+  const label = (access: boolean) => (access ? "可查看" : "无");
+  await withAudit(
+    db,
+    (tx) => upsertAccount(tx, userId, { mailAccess, now }),
+    () => ({
+      actor,
+      action: "account.mail_access_changed",
+      entityType: "account",
+      entityId: userId,
+      summary: `${user.email} 的邮箱权限：${label(target.mailAccess)} → ${label(mailAccess)}`,
+      detail: { from: target.mailAccess, to: mailAccess },
     }),
   );
 }

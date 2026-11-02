@@ -14,6 +14,7 @@ export {
   renameAccount,
   resetPassword,
   restoreAccount,
+  setMailAccess,
   setProjectRole,
   setSiteAccess,
   suspendAccount,
