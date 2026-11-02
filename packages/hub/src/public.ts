@@ -75,6 +75,17 @@ export {
   volunteerStatusLabels,
 } from "./site/site.policy";
 
+export {
+  canReadMail,
+  hasRemoteImages,
+  inboxAttachmentHref,
+  INBOX_PAGE_SIZE,
+  MAIL_FRAME_SANDBOX,
+  mailFrameCsp,
+  mailFrameDocument,
+  splitAddress,
+} from "./inbox/inbox.policy";
+
 export { IMPORT_ACCEPT, importSizeProblem } from "./documents/document.policy";
 
 export type {

@@ -1049,6 +1049,11 @@ export const zh = {
       siteHint:
         "能不能查看和处理官网上提交的数据，和后台角色无关。名单：看志愿者申请和加入登记，改志愿者的状态和备注；管理：在名单之外还能审核项目卡和项目进展。只有所有者能设置。",
       siteNone: "无",
+      mailHeading: "邮箱权限",
+      mailHint:
+        "能不能在 官网 → 邮箱 里看发到 hello@builderspace.dev 的信，和后台角色、官网权限都无关。只有所有者能设置。",
+      mailNone: "无",
+      mailRead: "可查看",
       departmentsHeading: "部门",
       departmentsHint:
         "这个人在各个项目里属于哪些部门，可以多选。部门名单在「部门」页维护。",
@@ -1249,6 +1254,40 @@ export const zh = {
           createdAt: "登记时间",
         },
         empty: "还没有人登记",
+      },
+      inbox: {
+        title: "邮箱",
+        description:
+          "发到 hello@builderspace.dev 的信，从 Resend 读取，保留 30 天。",
+        noAccess: {
+          heading: "没有邮箱权限",
+          body: "社团邮箱只对被所有者授予了邮箱权限的人开放。如果你需要，请联系所有者。",
+        },
+        notConnected: {
+          heading: "还没有连接邮箱",
+          body: "部署环境里还没有设置 HUB_RESEND_INBOX_API_KEY，连接方法见仓库的 BUILDERSPACE.md。",
+        },
+        empty: "还没有收到信",
+        noSubject: "（无主题）",
+        pick: "选一封信查看",
+        newer: "较新",
+        older: "较旧",
+        refresh: "刷新",
+        from: "发件人",
+        to: "收件人",
+        cc: "抄送",
+        replyTo: "回复到",
+        receivedAt: "收到于",
+        attachments: "附件",
+        hasAttachments: (count: number) => `${count} 个附件`,
+        html: "网页",
+        text: "纯文本",
+        showImages: "显示远程图片",
+        imagesHidden: "远程图片没有加载：加载会让发件人知道这封信被打开了。",
+        noBody: "这封信没有正文",
+        frameTitle: "邮件正文",
+        suspicious:
+          "这封信没通过发件域名的验证（DMARC），可能是冒充的，别点里面的链接。",
       },
       export: "导出表格",
       exporting: "正在导出…",

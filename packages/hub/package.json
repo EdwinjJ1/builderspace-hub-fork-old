@@ -36,6 +36,10 @@
       "types": "./src/documents/file-import.ts",
       "default": "./src/documents/file-import.ts"
     },
+    "./inbox": {
+      "types": "./src/inbox/index.ts",
+      "default": "./src/inbox/index.ts"
+    },
     "./forms": {
       "types": "./src/forms/index.ts",
       "default": "./src/forms/index.ts"

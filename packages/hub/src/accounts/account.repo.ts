@@ -8,6 +8,7 @@ import { hubAccounts } from "../schema";
 export interface AccountFacts {
   role: HubRole | null;
   siteAccess: SiteAccess | null;
+  mailAccess: boolean;
   status: AccountStatus;
 }
 
@@ -15,12 +16,14 @@ export interface AccountFacts {
 export const ORDINARY_ACCOUNT: AccountFacts = {
   role: null,
   siteAccess: null,
+  mailAccess: false,
   status: "active",
 };
 
 const factColumns = {
   role: hubAccounts.role,
   siteAccess: hubAccounts.siteAccess,
+  mailAccess: hubAccounts.mailAccess,
   status: hubAccounts.status,
 };
 
@@ -57,6 +60,7 @@ export async function upsertAccount(
   change: {
     role?: HubRole | null;
     siteAccess?: SiteAccess | null;
+    mailAccess?: boolean;
     status?: AccountStatus;
     suspendedAt?: Date | null;
     suspendedBy?: string | null;

@@ -113,6 +113,13 @@
       "when": 1793000549288,
       "tag": "20261026074229_AddAdminOnlyBoards",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793580098919,
+      "tag": "20261102004138_AddMailAccess",
+      "breakpoints": true
     }
   ]
 }
