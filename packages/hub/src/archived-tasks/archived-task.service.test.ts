@@ -618,6 +618,30 @@ describe("races and leftovers", () => {
     expect(await archiveIfStillDue(db, [card.id], daysLater(3))).toBe(1);
   });
 
+  it("leaves a task someone deleted by hand after it was listed as theirs", async () => {
+    const card = await seedCard(board.todo, "刚手动删掉");
+    await archive(card);
+    const later = daysLater(7);
+    expect(await listExpiredArchivedCards(db, deletionCutoff(later))).toEqual([
+      card.id,
+    ]);
+    const byHand = daysLater(7.5);
+    await db
+      .update(kanSchema.cards)
+      .set({ deletedAt: byHand, deletedBy: me.id })
+      .where(eq(kanSchema.cards.id, card.id));
+
+    expect(await deleteIfStillExpired(db, card.id, daysLater(8))).toBe(false);
+    expect(await deletionOf(card)).toEqual({
+      deletedAt: byHand,
+      deletedBy: me.id,
+    });
+    const [row] = await db
+      .select({ autoDeletedAt: hubArchivedCards.autoDeletedAt })
+      .from(hubArchivedCards);
+    expect(row?.autoDeletedAt).toBeNull();
+  });
+
   it("does not delete tasks on a board archived since", async () => {
     const card = await seedCard(board.todo, "看板归档了");
     await archive(card);
