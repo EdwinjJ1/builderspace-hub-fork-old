@@ -43,6 +43,8 @@ const STAGE_BY_LIST_NAME = new Map<string, Stage>([
     (name, index) =>
       [normalise(name), canonicalStages[index] ?? "other"] as const,
   ),
+  // The short form people write for 已完成 on boards they set up themselves.
+  ["完成", "done"],
   // Kan's own templates, so boards made from them still sort sensibly.
   ["to do", "todo"],
   ["todo", "todo"],
@@ -57,6 +59,23 @@ const STAGE_BY_LIST_NAME = new Map<string, Stage>([
 /** The column a card belongs in, from the name of its list. */
 export function stageOf(listName: string): Stage {
   return STAGE_BY_LIST_NAME.get(normalise(listName)) ?? "other";
+}
+
+/**
+ * Where a list for `stage` goes when its board has none: Kan's index of the
+ * first list of a later column, so 待验收 lands between 进行中 and 已完成
+ * whatever else the board keeps around them. Undefined when no later column
+ * has a list: the end, where Kan puts a new list anyway.
+ */
+export function missingListIndex(
+  lists: readonly { name: string; index: number }[],
+  stage: Exclude<Stage, "other">,
+): number | undefined {
+  const rank = (s: Stage) => (canonicalStages as readonly Stage[]).indexOf(s);
+  const later = [...lists]
+    .sort((a, b) => a.index - b.index)
+    .find((list) => rank(stageOf(list.name)) > rank(stage));
+  return later?.index;
 }
 
 const FUNCTION_BY_BOARD_NAME = new Map<string, FunctionKey>(

@@ -26,6 +26,8 @@ export interface ViewableProject {
   memberPublicId: string;
   canCreateTasks: boolean;
   canEditTasks: boolean;
+  /** May add a list to a board, for a column the board has none for. */
+  canCreateLists: boolean;
 }
 
 /**
@@ -80,6 +82,7 @@ export async function listViewableProjects(
         memberPublicId: membership.memberPublicId,
         canCreateTasks: permissions.includes("card:create"),
         canEditTasks: permissions.includes("card:edit"),
+        canCreateLists: permissions.includes("list:create"),
       });
     }
   }
@@ -221,8 +224,8 @@ export interface BoardWithLists {
   publicId: string;
   name: string;
   projectId: number;
-  /** Live lists, left to right. */
-  lists: { publicId: string; name: string }[];
+  /** Live lists, left to right, with Kan's index for each. */
+  lists: { publicId: string; name: string; index: number }[];
 }
 
 /**
@@ -245,6 +248,7 @@ export async function listBoardsWithLists(
       projectId: boards.workspaceId,
       listPublicId: lists.publicId,
       listName: lists.name,
+      listIndex: lists.index,
     })
     .from(boards)
     .leftJoin(lists, and(eq(lists.boardId, boards.id), isNull(lists.deletedAt)))
@@ -267,8 +271,12 @@ export async function listBoardsWithLists(
       projectId: row.projectId,
       lists: [],
     };
-    if (row.listPublicId && row.listName !== null) {
-      board.lists.push({ publicId: row.listPublicId, name: row.listName });
+    if (row.listPublicId && row.listName !== null && row.listIndex !== null) {
+      board.lists.push({
+        publicId: row.listPublicId,
+        name: row.listName,
+        index: row.listIndex,
+      });
     }
     byBoard.set(row.boardId, board);
   }
