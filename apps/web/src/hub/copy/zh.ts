@@ -600,6 +600,8 @@ export const zh = {
     move: {
       noList: (board: string, stage: string) =>
         `「${board}」看板没有「${stage}」列，没法移过去。`,
+      cannotAddList: (board: string, stage: string) =>
+        `「${board}」看板没有「${stage}」列，你也没有给它加列的权限，没法移过去。`,
       failed: "没有移动成功，已恢复原样。",
     },
     dueEdit: "改截止日期",

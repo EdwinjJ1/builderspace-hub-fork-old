@@ -23,8 +23,10 @@ import {
   functionKeyOf,
   functionKeys,
   isOpen,
+  missingListIndex,
   onBoard,
   stageOf,
+  stages,
 } from "./task.policy";
 
 /**
@@ -81,6 +83,11 @@ export interface TaskColumn {
 export interface ProjectAccess {
   canCreate: boolean;
   canEdit: boolean;
+  /**
+   * May add a list to a board: moving a task into a column its board has no
+   * list for adds that list first.
+   */
+  canAddLists: boolean;
   /** Their membership, for assigning a new task to themselves. */
   memberPublicId: string;
 }
@@ -95,6 +102,11 @@ export interface BoardTarget {
   functionKey: FunctionKey | null;
   project: ProjectChip;
   listsByStage: Partial<Record<Exclude<Stage, "other">, string>>;
+  /**
+   * For a column the board has no list for: the index a new list takes so it
+   * sits in column order (`missingListIndex`). Absent means the end.
+   */
+  newListIndex: Partial<Record<Exclude<Stage, "other">, number>>;
 }
 
 export interface TaskBoard {
@@ -206,9 +218,15 @@ export async function getTaskBoard(
     const project = chips.get(board.projectId);
     if (!project) return [];
     const listsByStage: BoardTarget["listsByStage"] = {};
+    const newListIndex: BoardTarget["newListIndex"] = {};
     for (const list of board.lists) {
       const stage = stageOf(list.name);
       if (stage !== "other") listsByStage[stage] ??= list.publicId;
+    }
+    for (const stage of stages) {
+      if (stage === "other" || listsByStage[stage]) continue;
+      const index = missingListIndex(board.lists, stage);
+      if (index !== undefined) newListIndex[stage] = index;
     }
     return [
       {
@@ -217,6 +235,7 @@ export async function getTaskBoard(
         functionKey: functionKeyOf(board.name),
         project,
         listsByStage,
+        newListIndex,
       },
     ];
   });
@@ -232,6 +251,7 @@ export async function getTaskBoard(
         {
           canCreate: project.canCreateTasks,
           canEdit: project.canEditTasks,
+          canAddLists: project.canCreateLists,
           memberPublicId: project.memberPublicId,
         },
       ]),
