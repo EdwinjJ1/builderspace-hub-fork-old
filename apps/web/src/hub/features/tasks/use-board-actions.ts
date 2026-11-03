@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import type { Stage, TaskView } from "@kan/hub/public";
 import { stageNames } from "@kan/hub/public";
@@ -16,11 +16,16 @@ import {
 import { api } from "~/utils/api";
 
 type Board = RouterOutputs["hub"]["tasks"]["board"];
+type BoardTarget = Board["boards"][number];
+type ListStage = Exclude<Stage, "other">;
 
 const text = copy.tasks;
 
 /** How many of my remaining tasks the toast lists after I finish one. */
 const DONE_TOAST_NEXT = 3;
+
+const listKey = (boardPublicId: string, stage: ListStage) =>
+  `${boardPublicId}:${stage}`;
 
 export interface NewTask {
   title: string;
@@ -32,10 +37,14 @@ export interface NewTask {
 
 /**
  * Everything the overall board can change, written through Kan's own card
- * API: the card is the same one its board shows, Kan checks the permission
- * and records the activity. 归档 is the Hub's own, so it goes through
- * `hub.tasks`. The board updates at once and is refreshed from the server
- * afterwards, as are the home page and 归档.
+ * and list API: the card is the same one its board shows, Kan checks the
+ * permission and records the activity. 归档 is the Hub's own, so it goes
+ * through `hub.tasks`. The board updates at once and is refreshed from the
+ * server afterwards, as are the home page and 归档.
+ *
+ * A board someone set up themselves may have no list for a column (no 待验收,
+ * say). Moving a task there adds that list to its board first, in column
+ * order, for anyone Kan lets add lists.
  */
 export function useBoardActions(
   board: Board | undefined,
@@ -47,6 +56,11 @@ export function useBoardActions(
   const deleteCard = api.card.delete.useMutation();
   const archiveTask = api.hub.tasks.archive.useMutation();
   const restoreTask = api.hub.tasks.restore.useMutation();
+  const createList = api.list.create.useMutation();
+  const updateList = api.list.update.useMutation();
+  // Lists being added, until the board reloads with them, so a second task
+  // dropped in the same column meanwhile lands in the same new list.
+  const addedLists = useRef(new Map<string, Promise<string>>());
   const [error, setError] = useState<string | null>(null);
   const [doneToast, setDoneToast] = useState<WhatIsLeft | null>(null);
   const dismissDoneToast = useCallback(() => setDoneToast(null), []);
@@ -63,12 +77,45 @@ export function useBoardActions(
   const targetOf = (boardPublicId: string) =>
     board?.boards.find((candidate) => candidate.publicId === boardPublicId);
 
+  /** The list that stands for `stage` on a board that has none, added now. */
+  function addListFor(target: BoardTarget, stage: ListStage): Promise<string> {
+    const key = listKey(target.publicId, stage);
+    const pending = addedLists.current.get(key);
+    if (pending) return pending;
+
+    const adding = (async () => {
+      const list = await createList.mutateAsync({
+        boardPublicId: target.publicId,
+        name: stageNames[stage],
+      });
+      const index = target.newListIndex[stage];
+      if (index !== undefined) {
+        // Kan adds a list on the end; this puts it in column order. Where it
+        // sits is cosmetic, so a refusal here does not stop the move.
+        await updateList
+          .mutateAsync({ listPublicId: list.publicId, index })
+          .catch(() => undefined);
+      }
+      return list.publicId;
+    })();
+    addedLists.current.set(key, adding);
+    // A failed attempt is not remembered, so the next drop tries again.
+    adding.catch(() => addedLists.current.delete(key));
+    return adding;
+  }
+
   async function move(task: HubTask, to: Stage): Promise<void> {
     if (to === task.stage || to === "other") return;
     const target = targetOf(task.board.publicId);
-    const listPublicId = target?.listsByStage[to];
-    if (!listPublicId) {
+    const existing = target?.listsByStage[to];
+    const mayAddList =
+      !!target && !!board?.access[target.project.publicId]?.canAddLists;
+    if (!target) {
       setError(text.move.noList(task.board.name, stageNames[to]));
+      return;
+    }
+    if (!existing && !mayAddList) {
+      setError(text.move.cannotAddList(task.board.name, stageNames[to]));
       return;
     }
 
@@ -79,13 +126,15 @@ export function useBoardActions(
     try {
       await updateCard.mutateAsync({
         cardPublicId: task.publicId,
-        listPublicId,
+        listPublicId: existing ?? (await addListFor(target, to)),
       });
       if (to === "done") void showWhatIsLeft();
     } catch {
       setError(text.move.failed);
     } finally {
-      void refresh();
+      void refresh().then(() => {
+        if (!existing) addedLists.current.delete(listKey(target.publicId, to));
+      });
     }
   }
 

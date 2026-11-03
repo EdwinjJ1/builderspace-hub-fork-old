@@ -12,6 +12,7 @@ import {
   functionKeys,
   functionNames,
   inView,
+  missingListIndex,
   onBoard,
   stageNames,
   stageOf,
@@ -46,9 +47,55 @@ describe("stageOf", () => {
     expect(stageOf("DONE")).toBe("done");
   });
 
+  it("reads 完成, the short form of 已完成, as done", () => {
+    expect(stageOf("完成")).toBe("done");
+    expect(stageOf(" 完成 ")).toBe("done");
+  });
+
   it("puts a renamed list in other instead of losing its cards", () => {
     expect(stageOf("灵感池")).toBe("other");
     expect(stageOf("")).toBe("other");
+  });
+});
+
+describe("missingListIndex", () => {
+  const lists = (...names: string[]) =>
+    names.map((name, index) => ({ name, index: index * 2 }));
+
+  it("puts a missing column in front of the first later one, by Kan's index", () => {
+    // Indexes 0, 2, 4: Kan's, not positions.
+    expect(missingListIndex(lists("待办", "进行中", "已完成"), "review")).toBe(
+      4,
+    );
+    expect(missingListIndex(lists("待办", "已完成"), "doing")).toBe(2);
+    expect(missingListIndex(lists("进行中", "已完成"), "todo")).toBe(0);
+  });
+
+  it("skips lists that are no column, wherever they are", () => {
+    expect(
+      missingListIndex(
+        lists("待办", "进行中", "卡住（暂停）", "完成", "每日日报"),
+        "review",
+      ),
+    ).toBe(6);
+  });
+
+  it("follows Kan's order, not the order the lists were given in", () => {
+    expect(
+      missingListIndex(
+        [
+          { name: "已完成", index: 5 },
+          { name: "待验收", index: 3 },
+        ],
+        "doing",
+      ),
+    ).toBe(3);
+  });
+
+  it("leaves it to the end when no later column has a list", () => {
+    expect(missingListIndex(lists("待办", "进行中"), "done")).toBeUndefined();
+    expect(missingListIndex(lists("灵感池"), "todo")).toBeUndefined();
+    expect(missingListIndex([], "review")).toBeUndefined();
   });
 });
 
