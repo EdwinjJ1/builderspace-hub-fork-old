@@ -222,6 +222,11 @@ function AccountsContent() {
                       </Pill>
                     </div>
                   )}
+                  {account.mailAccess && (
+                    <div className="mt-1">
+                      <Pill>{copy.admin.site.inbox.title}</Pill>
+                    </div>
+                  )}
                 </td>
                 <td className={tableClass.td}>
                   {account.projects.length === 0 ? (

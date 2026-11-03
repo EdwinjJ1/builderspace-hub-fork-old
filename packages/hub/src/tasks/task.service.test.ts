@@ -87,6 +87,36 @@ async function seedBoard(
   return ids as BoardLists;
 }
 
+/** A board someone set up with their own lists; their ids, by name. */
+async function seedCustomBoard(
+  project: Project,
+  name: string,
+  listNames: string[],
+): Promise<Map<string, number>> {
+  const [board] = await db
+    .insert(kanSchema.boards)
+    .values({
+      publicId: nextId(),
+      name,
+      slug: nextId(),
+      workspaceId: project.id,
+      createdBy: owner.id,
+    })
+    .returning({ id: kanSchema.boards.id });
+  if (!board) throw new Error("no board");
+
+  const ids = new Map<string, number>();
+  for (const [index, listName] of listNames.entries()) {
+    const [list] = await db
+      .insert(kanSchema.lists)
+      .values({ publicId: nextId(), name: listName, index, boardId: board.id })
+      .returning({ id: kanSchema.lists.id });
+    if (!list) throw new Error("no list");
+    ids.set(listName, list.id);
+  }
+  return ids;
+}
+
 async function seedCard(
   listId: number,
   title: string,
@@ -517,10 +547,12 @@ describe("what the task board lets someone do", () => {
     expect(board.access[coursemate.publicId]).toMatchObject({
       canCreate: true,
       canEdit: true,
+      canAddLists: true,
     });
     expect(board.access[echo.publicId]).toMatchObject({
       canCreate: false,
       canEdit: false,
+      canAddLists: false,
     });
     expect(board.access[coursemate.publicId]?.memberPublicId).toHaveLength(12);
     expect(board.access[community.publicId]).toBeUndefined();
@@ -553,6 +585,39 @@ describe("what the task board lets someone do", () => {
     ]);
     expect(board.boards[0]?.functionKey).toBe("dev");
     expect(board.boards[2]?.functionKey).toBeNull();
+    // Nothing is missing on a standard board.
+    expect(board.boards[0]?.newListIndex).toEqual({});
+  });
+
+  it("says where a board's missing columns would go, and reads 完成 as done", async () => {
+    await join(me, community, "admin");
+    const lists = await seedCustomBoard(community, "private", [
+      "待办",
+      "进行中",
+      "卡住（暂停）",
+      "完成",
+      "每日日报",
+    ]);
+    await seedCard(lists.get("完成") ?? 0, "做完了的");
+
+    const board = await getTaskBoard(db, {
+      userId: me.id,
+      view: "all",
+      projectPublicId: community.publicId,
+      now,
+    });
+    const target = board.boards.find((b) => b.name === "private");
+
+    expect(Object.keys(target?.listsByStage ?? {})).toEqual([
+      "todo",
+      "doing",
+      "done",
+    ]);
+    // 待验收 goes in front of 完成, after the list the board added itself.
+    expect(target?.newListIndex).toEqual({ review: 3 });
+    expect(
+      board.columns.find((c) => c.stage === "done")?.tasks.map((t) => t.title),
+    ).toEqual(["做完了的"]);
   });
 
   it("names the people a task is assigned to", async () => {

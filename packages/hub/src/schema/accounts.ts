@@ -1,5 +1,12 @@
 import { sql } from "drizzle-orm";
-import { check, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  pgTable,
+  timestamp,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 
 import { users } from "@kan/db/schema";
 
@@ -11,8 +18,8 @@ export type AccountStatus = (typeof accountStatuses)[number];
 
 /**
  * Hub-specific facts about a Kan user: their back-office role, if any, their
- * access to the official website's data, if any, and whether the account is
- * suspended. A user without a row is an ordinary, active account; rows are
+ * access to the official website's data and to the club mailbox, and whether
+ * the account is suspended. A user without a row is an ordinary, active account; rows are
  * created only when one of those changes.
  */
 export const hubAccounts = pgTable(
@@ -24,6 +31,8 @@ export const hubAccounts = pgTable(
     role: varchar("role", { length: 16 }).$type<HubRole>(),
     /** Granted per person by an owner; independent of `role`. */
     siteAccess: varchar("siteAccess", { length: 16 }).$type<SiteAccess>(),
+    /** Reading hello@'s mail; granted per person by an owner, like `siteAccess`. */
+    mailAccess: boolean("mailAccess").notNull().default(false),
     status: varchar("status", { length: 16 })
       .$type<AccountStatus>()
       .notNull()

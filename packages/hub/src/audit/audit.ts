@@ -29,6 +29,7 @@ export type AuditAction =
   | "account.project_role_changed"
   | "account.project_removed"
   | "account.site_access_changed"
+  | "account.mail_access_changed"
   | "department.created"
   | "department.renamed"
   | "department.reordered"

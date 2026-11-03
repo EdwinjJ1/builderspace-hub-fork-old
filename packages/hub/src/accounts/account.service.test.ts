@@ -20,6 +20,7 @@ import {
   renameAccount,
   resetPassword,
   restoreAccount,
+  setMailAccess,
   setProjectRole,
   setSiteAccess,
   suspendAccount,
@@ -338,6 +339,7 @@ describe("suspendAccount / restoreAccount", () => {
     expect(await getAccessFacts(db, member.userId)).toEqual({
       role: null,
       siteAccess: null,
+      mailAccess: false,
       status: "suspended",
     });
     expect(
@@ -481,5 +483,54 @@ describe("setSiteAccess", () => {
         now,
       ),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
+describe("setMailAccess", () => {
+  it("is off for everyone until an owner turns it on, themselves included", async () => {
+    const member = await seedUser(db, { email: "mail@example.test" });
+    expect((await getAccessFacts(db, owner.userId)).mailAccess).toBe(false);
+
+    await setMailAccess(db, owner, member.id, true, now);
+    await setMailAccess(db, owner, owner.userId, true, now);
+
+    expect(await getAccessFacts(db, member.id)).toMatchObject({
+      role: null,
+      siteAccess: null,
+      mailAccess: true,
+    });
+    expect((await getAccount(db, owner.userId))?.mailAccess).toBe(true);
+    const [latest] = await listAudit(db, { limit: 1, offset: 0 });
+    expect(latest).toMatchObject({
+      action: "account.mail_access_changed",
+      summary: "owner@example.test 的邮箱权限：无 → 可查看",
+    });
+  });
+
+  it("is independent of website access and the back-office role", async () => {
+    await setSiteAccess(db, owner, admin.userId, "manage", now);
+    await setMailAccess(db, owner, admin.userId, true, now);
+    await setMailAccess(db, owner, admin.userId, false, now);
+    expect(await getAccessFacts(db, admin.userId)).toMatchObject({
+      role: "admin",
+      siteAccess: "manage",
+      mailAccess: false,
+    });
+  });
+
+  it("refuses admins: only owners decide who reads the mailbox", async () => {
+    const member = await seedUser(db, { email: "mail@example.test" });
+    await expect(
+      setMailAccess(db, admin, member.id, true, now),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      setMailAccess(db, admin, admin.userId, true, now),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("does nothing, and logs nothing, when access is unchanged", async () => {
+    const before = (await actions()).length;
+    await setMailAccess(db, owner, admin.userId, false, now);
+    expect(await actions()).toHaveLength(before);
   });
 });

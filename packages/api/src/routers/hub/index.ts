@@ -18,6 +18,7 @@ import {
   renameAccount,
   resetPassword,
   restoreAccount,
+  setMailAccess,
   setProjectRole,
   setSiteAccess,
   suspendAccount,
@@ -81,6 +82,7 @@ import { createTRPCRouter } from "../../trpc";
 import { departmentsRouter } from "./departments";
 import { documentsRouter } from "./documents";
 import { formsRouter } from "./forms";
+import { inboxRouter } from "./inbox";
 import { mcpRouter } from "./mcp/router";
 import { hubAdminProcedure, hubProcedure, runHub } from "./procedures";
 import { siteRouter } from "./site";
@@ -118,6 +120,7 @@ const meRouter = createTRPCRouter({
       role: ctx.actor.role,
       permissions: permissionsOf(ctx.actor.role),
       siteAccess: ctx.siteAccess,
+      mailAccess: ctx.mailAccess,
     };
   }),
 });
@@ -168,6 +171,15 @@ const accountsRouter = createTRPCRouter({
     .mutation(({ ctx, input }) =>
       runHub(() =>
         setSiteAccess(ctx.db, ctx.actor, input.userId, input.access),
+      ),
+    ),
+
+  /** 邮箱权限: who may read hello@'s mail. Owners only. */
+  setMailAccess: hubAdminProcedure("admins.manage")
+    .input(userIdInput.extend({ access: z.boolean() }))
+    .mutation(({ ctx, input }) =>
+      runHub(() =>
+        setMailAccess(ctx.db, ctx.actor, input.userId, input.access),
       ),
     ),
 
@@ -569,6 +581,7 @@ export const hubRouter = createTRPCRouter({
   repos: reposRouter,
   github: githubRouter,
   site: siteRouter,
+  inbox: inboxRouter,
   archive: archiveRouter,
   boards: boardsRouter,
   nudges: nudgesRouter,

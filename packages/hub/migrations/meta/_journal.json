@@ -120,6 +120,13 @@
       "when": 1793020413025,
       "tag": "20261026131333_AddArchivedCards",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793580098919,
+      "tag": "20261102004138_AddMailAccess",
+      "breakpoints": true
     }
   ]
 }

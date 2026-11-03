@@ -139,10 +139,12 @@ export async function listExpiredArchivedCards(
 }
 
 /**
- * Locks one card's 归档 row for the rest of the transaction if the card is
- * still due for deletion, and returns its public id; undefined if someone
- * restored or deleted it since it was listed. A restore that comes after waits
- * for the lock and then finds nothing to restore.
+ * Locks one card and its 归档 row for the rest of the transaction if the card
+ * is still due for deletion, and returns its public id; undefined if someone
+ * restored or deleted it since it was listed. Both rows are locked: a restore
+ * writes the 归档 row and Kan's own delete writes the card, and either one
+ * that arrives first wins (the check is made against what it committed),
+ * while one that arrives later waits and then finds nothing to do.
  */
 export async function lockExpiredArchivedCard(
   tx: Tx,
@@ -158,7 +160,7 @@ export async function lockExpiredArchivedCard(
     .where(
       and(eq(hubArchivedCards.cardId, cardId), expiredArchivedCards(cutoff)),
     )
-    .for("update", { of: hubArchivedCards })
+    .for("update", { of: [hubArchivedCards, cards] })
     .limit(1);
   return row;
 }
