@@ -1,15 +1,9 @@
-import type {
-  CollisionDetection,
-  DragEndEvent,
-  DragStartEvent,
-} from "@dnd-kit/core";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
   MouseSensor,
-  pointerWithin,
-  rectIntersection,
   TouchSensor,
   useDroppable,
   useSensor,
@@ -41,6 +35,7 @@ import { archivedTasksHref } from "~/hub/lib/routes";
 import { useFunctionColors } from "~/hub/lib/use-function-colors";
 import { buttonClass, ErrorText } from "~/hub/ui/admin-primitives";
 import { BoardCard } from "./BoardCard";
+import { columnUnderPointer } from "./column-collision";
 import { columnMode } from "./column-layout";
 import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";
 import { DoneToast } from "./DoneToast";
@@ -231,17 +226,6 @@ export function ColorLegend() {
     </p>
   );
 }
-
-/**
- * The column the pointer is over. The card being dragged is wide and the
- * columns are tall, so the card's own box often overlaps two columns at once;
- * going by the pointer drops where the person is pointing. The card's box is
- * only the fallback, for a drag started from the keyboard.
- */
-const columnUnderPointer: CollisionDetection = (args) => {
-  const underPointer = pointerWithin(args);
-  return underPointer.length > 0 ? underPointer : rectIntersection(args);
-};
 
 function Columns({
   board,
