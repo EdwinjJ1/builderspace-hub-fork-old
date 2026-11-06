@@ -3,13 +3,21 @@ import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useDroppable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
 import { useState } from "react";
-import { TbArchive, TbPlus, TbSquare, TbSquareCheck } from "react-icons/tb";
+import {
+  TbArchive,
+  TbChevronLeft,
+  TbChevronRight,
+  TbPlus,
+  TbSquare,
+  TbSquareCheck,
+} from "react-icons/tb";
 import { twMerge } from "tailwind-merge";
 
 import type { Stage, TaskView } from "@kan/hub/public";
@@ -27,6 +35,9 @@ import { archivedTasksHref } from "~/hub/lib/routes";
 import { useFunctionColors } from "~/hub/lib/use-function-colors";
 import { buttonClass, ErrorText } from "~/hub/ui/admin-primitives";
 import { BoardCard } from "./BoardCard";
+import { columnUnderPointer } from "./column-collision";
+import { columnMode } from "./column-layout";
+import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";
 import { DoneToast } from "./DoneToast";
 import { NewTaskForm } from "./NewTaskForm";
 import { chipClass } from "./ScopeSwitcher";
@@ -71,6 +82,8 @@ export function TaskBoardBody({
 }) {
   const actions = useBoardActions(board, query);
   const [formStage, setFormStage] = useState<OpenStage | null>(null);
+  // The task whose 删除 is waiting for "are you sure".
+  const [pendingDelete, setPendingDelete] = useState<HubTask | null>(null);
   const canCreateSomewhere = board.boards.some(
     (target) => board.access[target.project.publicId]?.canCreate,
   );
@@ -150,9 +163,19 @@ export function TaskBoardBody({
         onMove={actions.move}
         onSetDue={actions.setDue}
         onArchive={actions.archive}
-        onDelete={actions.remove}
+        onDelete={setPendingDelete}
         onAdd={canCreateSomewhere ? setFormStage : undefined}
       />
+      {pendingDelete && (
+        <ConfirmDeleteDialog
+          task={pendingDelete}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={(task) => {
+            setPendingDelete(null);
+            void actions.remove(task);
+          }}
+        />
+      )}
       <DoneToast toast={actions.doneToast} onClose={actions.dismissDoneToast} />
       <UndoToast notice={actions.notice} onClose={actions.dismissNotice} />
     </div>
@@ -225,16 +248,24 @@ function Columns({
   onAdd?: (stage: OpenStage) => void;
 }) {
   // A small distance before a drag starts keeps plain clicks opening the card.
+  // On a touch screen a drag starts after a short press, so a swipe still
+  // scrolls the board.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 8 },
+    }),
   );
   const [dragging, setDragging] = useState<HubTask | null>(null);
+  const [otherOpen, setOtherOpen] = useState(false);
   const canEdit = (task: HubTask) =>
     board.access[task.project.publicId]?.canEdit ?? false;
 
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={columnUnderPointer}
+      autoScroll={{ threshold: { x: 0.12, y: 0.15 }, acceleration: 14 }}
       onDragStart={(event: DragStartEvent) =>
         setDragging((event.active.data.current as { task: HubTask }).task)
       }
@@ -266,6 +297,9 @@ function Columns({
             onArchive={onArchive}
             onDelete={onDelete}
             onAdd={onAdd}
+            dragging={dragging !== null}
+            otherOpen={otherOpen}
+            onToggleOther={() => setOtherOpen((open) => !open)}
           />
         ))}
       </div>
@@ -286,6 +320,9 @@ function TaskColumn({
   onArchive,
   onDelete,
   onAdd,
+  dragging,
+  otherOpen,
+  onToggleOther,
 }: {
   column: Column;
   fill: boolean;
@@ -294,6 +331,10 @@ function TaskColumn({
   onArchive: (task: HubTask) => void;
   onDelete: (task: HubTask) => void;
   onAdd?: (stage: OpenStage) => void;
+  /** Someone is dragging a task: the column under the pointer says so. */
+  dragging: boolean;
+  otherOpen: boolean;
+  onToggleOther: () => void;
 }) {
   // "Other" holds renamed lists; there is no single list to move a task into.
   const { setNodeRef, isOver } = useDroppable({
@@ -302,12 +343,34 @@ function TaskColumn({
   });
   const limited = column.total > column.tasks.length;
   const stage = column.stage;
+  const mode = columnMode(stage, column.total, otherOpen);
+
+  // 其他 closed: a thin bar, since nothing can be dropped there.
+  if (mode === "strip") {
+    return (
+      <button
+        type="button"
+        title={copy.tasks.columns.otherHint}
+        aria-label={copy.tasks.columns.openOther}
+        disabled={column.total === 0}
+        onClick={onToggleOther}
+        className="flex w-10 shrink-0 flex-col items-center gap-2 rounded-xl bg-light-100 py-3 text-xs text-light-900 transition-colors enabled:hover:bg-light-200 disabled:cursor-default disabled:opacity-60 dark:bg-dark-100 dark:text-dark-900 dark:enabled:hover:bg-dark-200"
+      >
+        <TbChevronLeft className="h-4 w-4" aria-hidden="true" />
+        <span className="tabular-nums">{column.total}</span>
+        <span className="[writing-mode:vertical-rl]">{stageTitle(stage)}</span>
+      </button>
+    );
+  }
 
   return (
     <section
       ref={setNodeRef}
       className={twMerge(
-        "flex min-w-[15rem] flex-1 basis-0 flex-col rounded-xl bg-light-100 p-2 transition-colors dark:bg-dark-100",
+        "flex min-w-[15rem] max-w-[24rem] flex-1 basis-0 flex-col rounded-xl bg-light-100 p-2 transition-colors dark:bg-dark-100",
+        // Nothing here yet: narrower, so the columns with tasks get the room,
+        // but still wide enough to drop a task on.
+        mode === "slim" && "min-w-[11rem] max-w-[13rem] flex-none basis-44",
         // Embedded (the home page): a column scrolls on its own past this height.
         !fill && "max-h-[34rem]",
         isOver &&
@@ -317,9 +380,26 @@ function TaskColumn({
       <h2 className="flex items-center justify-between px-2 py-1.5 text-sm font-semibold text-light-1000 dark:text-dark-1000">
         {stageTitle(stage)}
         <span className="flex items-center gap-1">
-          <span className="text-xs font-normal tabular-nums text-light-900 dark:text-dark-900">
-            {column.total}
-          </span>
+          {dragging && isOver && stage !== "other" ? (
+            <span className="rounded bg-light-1000 px-1.5 text-xs font-normal leading-5 text-light-50 dark:bg-dark-1000 dark:text-dark-50">
+              {copy.tasks.columns.dropHere}
+            </span>
+          ) : (
+            <span className="text-xs font-normal tabular-nums text-light-900 dark:text-dark-900">
+              {column.total}
+            </span>
+          )}
+          {stage === "other" && (
+            <button
+              type="button"
+              title={copy.tasks.columns.closeOther}
+              aria-label={copy.tasks.columns.closeOther}
+              className="rounded p-0.5 text-light-900 hover:bg-light-300 hover:text-light-1000 dark:text-dark-900 dark:hover:bg-dark-300"
+              onClick={onToggleOther}
+            >
+              <TbChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
           {onAdd && stage !== "other" && (
             <button
               type="button"

@@ -621,9 +621,18 @@ export const zh = {
       label: "更多操作",
       archive: "归档",
       delete: "删除",
-      confirmDelete: "删除后不能恢复，确定吗？",
-      confirm: "确定删除",
+    },
+    deleteDialog: {
+      title: "删除这个任务？",
+      body: "删除后不能恢复。",
+      confirm: "删除",
       cancel: "取消",
+    },
+    columns: {
+      dropHere: "放到这里",
+      openOther: "展开「其他」",
+      closeOther: "收起",
+      otherHint: "名字不是待办、进行中、待验收、已完成的列，任务不能拖进来",
     },
     archived: {
       link: "归档",

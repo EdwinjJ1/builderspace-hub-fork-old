@@ -106,7 +106,13 @@ export function TaskRow({ task }: { task: HubTask }) {
       <span
         aria-hidden="true"
         className="h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: colorOf(colors, task.functionKey) }}
+        style={{
+          backgroundColor: colorOf(
+            colors,
+            task.functionKey,
+            task.board.publicId,
+          ),
+        }}
       />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-light-1000 dark:text-dark-1000">

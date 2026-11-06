@@ -2,6 +2,7 @@ import type { FunctionColors, FunctionKey } from "@kan/hub/public";
 import { DEFAULT_FUNCTION_COLORS } from "@kan/hub/public";
 
 import { api } from "~/utils/api";
+import { boardColour } from "./board-colour";
 
 /**
  * The colours 技术 / 活动 / 运营 are painted in, set in the back office.
@@ -16,12 +17,17 @@ export function useFunctionColors(): FunctionColors {
   return data ?? DEFAULT_FUNCTION_COLORS;
 }
 
-/** The colour for a task's function; neutral grey for any other board. */
+/**
+ * The colour for a task's function. A task on any other board gets a steady
+ * colour of its board's own when that board is given, and neutral grey if not.
+ */
 export function colorOf(
   colors: FunctionColors,
   key: FunctionKey | null,
+  boardPublicId?: string,
 ): string {
-  return key ? colors[key] : "#9CA3AF";
+  if (key) return colors[key];
+  return boardPublicId ? boardColour(boardPublicId) : "#9CA3AF";
 }
 
 /** A see-through version of a #RRGGBB colour, for soft backgrounds. */

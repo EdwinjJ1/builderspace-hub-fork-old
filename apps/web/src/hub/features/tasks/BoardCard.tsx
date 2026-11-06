@@ -13,6 +13,7 @@ import {
 } from "~/hub/lib/use-function-colors";
 import { useOpenInProject } from "~/hub/lib/use-open-in-project";
 import { CardMenu } from "./CardMenu";
+import { noDrag } from "./no-drag";
 import { DueBadge, Labels, taskWhere } from "./task-display";
 
 const text = copy.tasks;
@@ -84,7 +85,7 @@ export function BoardCard({
   isOverlay?: boolean;
 }) {
   const colors = useFunctionColors();
-  const color = colorOf(colors, task.functionKey);
+  const color = colorOf(colors, task.functionKey, task.board.publicId);
   const openInProject = useOpenInProject();
   const [editingDue, setEditingDue] = useState(false);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -108,7 +109,7 @@ export function BoardCard({
         if (event.key === "Enter") open();
       }}
       className={twMerge(
-        "group relative block w-full cursor-pointer overflow-hidden rounded-lg border border-light-300 bg-light-50 py-2.5 pl-3.5 pr-3 text-left shadow-sm transition hover:border-light-600 dark:border-dark-300 dark:bg-dark-100 dark:hover:border-dark-600",
+        "group relative block w-full cursor-pointer overflow-hidden rounded-lg border border-light-300 bg-light-50 py-2 pl-3.5 pr-3 text-left shadow-sm transition hover:border-light-600 dark:border-dark-300 dark:bg-dark-100 dark:hover:border-dark-600",
         canEdit && "cursor-grab active:cursor-grabbing",
         isDragging && !isOverlay && "opacity-40",
         isOverlay && "rotate-1 shadow-lg",
@@ -131,21 +132,19 @@ export function BoardCard({
           onDelete={onDelete && (() => onDelete(task))}
         />
       )}
-      <span className="mt-1 block text-sm font-medium leading-5 text-light-1000 dark:text-dark-1000">
+      <span
+        title={task.title}
+        className="mt-0.5 line-clamp-2 text-sm font-medium leading-5 text-light-1000 dark:text-dark-1000"
+      >
         {task.title}
       </span>
 
-      <span className="mt-2 flex flex-wrap items-center gap-2">
+      <span className="mt-1.5 flex flex-wrap items-center gap-2">
         <Labels task={task} />
 
         {editingDue ? (
           // Inputs inside a draggable must not start a drag or open the card.
-          <span
-            className="flex items-center gap-1"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
+          <span className="flex items-center gap-1" {...noDrag}>
             <input
               type="date"
               autoFocus
@@ -180,7 +179,9 @@ export function BoardCard({
             type="button"
             title={text.dueEdit}
             className="rounded px-0.5 hover:bg-light-200 dark:hover:bg-dark-200"
-            onPointerDown={(event) => event.stopPropagation()}
+            onPointerDown={noDrag.onPointerDown}
+            onMouseDown={noDrag.onMouseDown}
+            onTouchStart={noDrag.onTouchStart}
             onClick={(event) => {
               event.stopPropagation();
               setEditingDue(true);
