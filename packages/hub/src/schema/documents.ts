@@ -57,6 +57,9 @@ export const hubDocumentFolders = pgTable(
  * `readable` is the per-document read switch: on, every member can read it.
  * Off, only the people who can edit it can, plus whoever is listed in
  * `hub_document_reader` (指定的人). With nobody listed it is 仅编辑者可见.
+ * `readersCanEdit` lets everyone who can read it change its content too
+ * (能看的人都能改); it is only ever on while someone besides the editors can
+ * read it.
  * `sha256` is set when the server saw the bytes (the import command) and is
  * what makes importing the same file twice a no-op.
  */
@@ -78,6 +81,7 @@ export const hubDocuments = pgTable(
     sha256: varchar("sha256", { length: 64 }),
     storageKey: varchar("storageKey", { length: 200 }).notNull().unique(),
     readable: boolean("readable").notNull().default(true),
+    readersCanEdit: boolean("readersCanEdit").notNull().default(false),
     uploadedBy: uuid("uploadedBy").references(() => users.id, {
       onDelete: "set null",
     }),

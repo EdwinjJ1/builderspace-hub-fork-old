@@ -3,7 +3,8 @@ import { useRouter } from "next/router";
 import { useState } from "react";
 import { TbChevronRight } from "react-icons/tb";
 
-import type { ReaderList } from "./audience-choice";
+import type { AudienceChoice, ReaderList } from "./audience-choice";
+import type { EditAccess } from "./EditAccessPicker";
 import { PageHead } from "~/components/PageHead";
 import { copy } from "~/hub/copy/zh";
 import {
@@ -29,6 +30,7 @@ import {
   formatDate,
 } from "./document-display";
 import { DocumentViewer } from "./DocumentViewer";
+import { EditAccessPicker } from "./EditAccessPicker";
 import { TextEditor } from "./TextEditor";
 
 const text = copy.documents;
@@ -112,7 +114,10 @@ export function DocumentPage() {
                   {doc.audience === "selected" && (
                     <Pill>{text.badges.selected}</Pill>
                   )}
-                  {doc.canEdit && (
+                  {doc.editAccess === "readers" && (
+                    <Pill>{text.badges.openEdit}</Pill>
+                  )}
+                  {doc.canEditContent && (
                     <Pill tone="strong">{text.badges.canEdit}</Pill>
                   )}
                 </div>
@@ -142,15 +147,17 @@ export function DocumentPage() {
               </div>
             </header>
 
-            {doc.canEdit && (
+            {(doc.canEdit || doc.canEditText) && (
               <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className={buttonClass.ghost}
-                  onClick={() => setEditing((value) => !value)}
-                >
-                  {text.actions.edit}
-                </button>
+                {doc.canEdit && (
+                  <button
+                    type="button"
+                    className={buttonClass.ghost}
+                    onClick={() => setEditing((value) => !value)}
+                  >
+                    {text.actions.edit}
+                  </button>
+                )}
                 {doc.canEditText && (
                   <button
                     type="button"
@@ -160,13 +167,15 @@ export function DocumentPage() {
                     {text.actions.editText}
                   </button>
                 )}
-                <ConfirmButton
-                  label={text.actions.delete}
-                  isPending={remove.isPending}
-                  onConfirm={() =>
-                    remove.mutate({ documentPublicId: doc.publicId })
-                  }
-                />
+                {doc.canEdit && (
+                  <ConfirmButton
+                    label={text.actions.delete}
+                    isPending={remove.isPending}
+                    onConfirm={() =>
+                      remove.mutate({ documentPublicId: doc.publicId })
+                    }
+                  />
+                )}
                 <ErrorText message={remove.error?.message} />
               </div>
             )}
@@ -224,6 +233,7 @@ function EditForm({
     description: string | null;
     folderPublicId: string | null;
     audience: "all" | "selected" | "editors";
+    editAccess: EditAccess;
     readers: ReaderList | null;
     folderOptions: { publicId: string; path: string }[];
   };
@@ -234,7 +244,13 @@ function EditForm({
   const [folder, setFolder] = useState(doc.folderPublicId ?? "");
   const [initialAudience] = useState(() => audienceFrom(doc));
   const [audience, setAudience] = useState(initialAudience);
+  const [editAccess, setEditAccess] = useState(doc.editAccess);
   const update = api.hub.documents.update.useMutation({ onSuccess: onDone });
+  const chooseAudience = (next: AudienceChoice) => {
+    setAudience(next);
+    // Only its editors can read it: nobody else is left to open it to.
+    if (next.kind === "editors") setEditAccess("assigned");
+  };
 
   return (
     <Card>
@@ -250,6 +266,7 @@ function EditForm({
             // Only when changed: a list that names someone since suspended
             // would otherwise be refused, and with it the title change.
             ...(audienceChanged(audience, initialAudience) ? { audience } : {}),
+            ...(editAccess !== doc.editAccess ? { editAccess } : {}),
           });
         }}
       >
@@ -289,8 +306,15 @@ function EditForm({
         <div className="md:col-span-2">
           <AudiencePicker
             value={audience}
-            onChange={setAudience}
+            onChange={chooseAudience}
             known={doc.readers}
+          />
+        </div>
+        <div className="md:col-span-2">
+          <EditAccessPicker
+            value={editAccess}
+            onChange={setEditAccess}
+            audience={audience.kind}
           />
         </div>
         <div className="flex items-center gap-2 md:col-span-2">

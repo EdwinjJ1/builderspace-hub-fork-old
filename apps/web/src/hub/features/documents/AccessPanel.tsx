@@ -15,7 +15,9 @@ const text = copy.documents.access;
 
 interface Detail {
   publicId: string;
+  editAccess: "assigned" | "readers";
   canEdit: boolean;
+  canEditContent: boolean;
   canManageEditors: boolean;
   canRequestEdit: boolean;
   myRequest: {
@@ -34,7 +36,8 @@ interface Detail {
 
 /**
  * Who may change this document, and how to get the right: ordinary members ask,
- * owners and the document's admin-editors assign and decide.
+ * owners and the document's admin-editors assign and decide. A document open
+ * to its readers needs no asking for its content.
  */
 export function AccessPanel({ detail }: { detail: Detail }) {
   const utils = api.useUtils();
@@ -48,13 +51,18 @@ export function AccessPanel({ detail }: { detail: Detail }) {
   return (
     <Card title={text.title} hint={text.hint}>
       <div className="space-y-5">
+        {detail.editAccess === "readers" && (
+          <p className="text-sm text-light-900 dark:text-dark-900">
+            {text.openToReaders}
+          </p>
+        )}
         <EditorList detail={detail} onChanged={() => void refresh()} />
         {detail.canEdit && !detail.canManageEditors && (
           <p className="text-sm text-light-900 dark:text-dark-900">
             {text.canEdit}
           </p>
         )}
-        {!detail.canEdit && (
+        {!detail.canEditContent && (
           <RequestBox detail={detail} onChanged={() => void refresh()} />
         )}
         {detail.canManageEditors && (

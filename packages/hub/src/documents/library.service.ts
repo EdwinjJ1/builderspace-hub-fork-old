@@ -5,7 +5,7 @@ import { generateUID } from "@kan/shared/utils";
 import type { AdminActor } from "../accounts/account.service";
 import type { Db } from "../db";
 import type { ReaderList } from "./audience.service";
-import type { Audience, PreviewKind } from "./document.policy";
+import type { Audience, EditAccess, PreviewKind } from "./document.policy";
 import type { DocumentRow, FolderRow, ReaderRow } from "./document.repo";
 import type { DocumentStorage } from "./storage";
 import { withAudit } from "../audit";
@@ -16,9 +16,11 @@ import { loadReadable, loadReader, requireUserId } from "./document.guard";
 import {
   audienceOf,
   canCreateDocument,
+  canEditContent,
   canEditDocument,
   canReadDocument,
   canRequestEdit,
+  editAccessOf,
   fileLabel,
   FOLDER_MAX_DEPTH,
   FOLDER_NAME_MAX_LENGTH,
@@ -67,8 +69,12 @@ export interface DocumentSummary {
   readable: boolean;
   /** Who can read it besides its editors. */
   audience: Audience;
-  /** Whether the viewer may change it. */
+  /** Who can change its content: the assigned editors, or every reader too. */
+  editAccess: EditAccess;
+  /** Whether the viewer may change it: details, 谁能看, 谁能改, deleting. */
   canEdit: boolean;
+  /** Whether the viewer may rewrite its content. */
+  canEditContent: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -130,6 +136,7 @@ function summarise(
   hasReaders: boolean,
 ): DocumentSummary {
   const folder = row.folderId === null ? undefined : byId.get(row.folderId);
+  const audience = audienceOf({ readable: row.readable, hasReaders });
   return {
     publicId: row.publicId,
     title: row.title,
@@ -144,8 +151,15 @@ function summarise(
       .map((f) => f.name)
       .join(" / "),
     readable: row.readable,
-    audience: audienceOf({ readable: row.readable, hasReaders }),
+    audience,
+    editAccess: editAccessOf({ audience, readersCanEdit: row.readersCanEdit }),
     canEdit,
+    // Only documents the viewer can read are summarised.
+    canEditContent: canEditContent({
+      canEdit,
+      canRead: true,
+      readersCanEdit: row.readersCanEdit,
+    }),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -329,16 +343,16 @@ export async function getDocumentDetail(
     canManageEditors: access.canManage,
     canRequestEdit: canRequestEdit({
       canRead: true,
-      canEdit: access.canEdit,
+      canEditContent: access.canEditContent,
       hasPendingRequest: hasPending,
     }),
     canEditText:
-      access.canEdit &&
+      access.canEditContent &&
       storage !== null &&
       previewKindOf(row.ext) !== null &&
       row.size <= MAX_TEXT_BYTES,
     myRequest:
-      latest && !access.canEdit
+      latest && !access.canEditContent
         ? {
             status: latest.status,
             note: latest.note,

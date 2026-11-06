@@ -26,8 +26,9 @@ export { statusOfHubError } from "../shared/rest";
  * authentication (an API key or a browser session), the rate limit and the
  * reading and writing of HTTP. Every rule still lives in the use cases, so the
  * API can do exactly what the web app can do for the same person, and no more.
- * That includes choosing who can read a document (`audience`), which the web
- * app's 谁能看 does for anyone who can edit it.
+ * That includes choosing who can read a document (`audience`) and whether its
+ * readers can change its content (`editAccess`), which the web app's 谁能看 and
+ * 谁能改 do for anyone who can edit it.
  *
  * Deliberately not here, whatever the caller's rights: deleting a document or a
  * folder, and handing out or deciding edit rights. An API key has no scope yet,
@@ -55,6 +56,8 @@ const patchBody = z.object({
   /** Who can read it; wins over `readable`. */
   audience: audienceSchema.optional(),
   readable: z.boolean().optional(),
+  /** Who can change the content: the assigned editors, or every reader too. */
+  editAccess: z.enum(["assigned", "readers"]).optional(),
 });
 
 const contentBody = z.object({
@@ -91,7 +94,9 @@ function documentJson(doc: DocumentSummary) {
     folderPublicId: doc.folderPublicId,
     readable: doc.readable,
     audience: doc.audience,
+    editAccess: doc.editAccess,
     canEdit: doc.canEdit,
+    canEditContent: doc.canEditContent,
     updatedAt: doc.updatedAt.toISOString(),
   };
 }

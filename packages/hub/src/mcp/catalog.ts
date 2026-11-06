@@ -179,7 +179,7 @@ export const mcpTools: readonly McpToolInfo[] = [
     name: "doc_list",
     title: "文档列表",
     description:
-      "文档库：一个文件夹里的文档和子文件夹（不传 folder 是最上层），或按标题搜索。只列出当前账号看得到的文档；audience 是谁能看：all 所有成员、selected 指定的人、editors 只有能编辑的人。",
+      "文档库：一个文件夹里的文档和子文件夹（不传 folder 是最上层），或按标题搜索。只列出当前账号看得到的文档；audience 是谁能看：all 所有成员、selected 指定的人、editors 只有能编辑的人；editAccess 是谁能改内容：assigned 所有者和被指派的人、readers 能看的人都能改；canEditContent 是当前账号能不能改内容。",
     group: "documents",
     needs: null,
     ...read,
@@ -215,7 +215,7 @@ export const mcpTools: readonly McpToolInfo[] = [
     name: "doc_update",
     title: "修改文档",
     description:
-      "替换文档内容或改标题。替换内容时把 doc_read 返回的 updatedAt 填进 expected_updated_at：别人在那之后改过就会拒绝，不会覆盖别人的修改。只有能编辑这份文档的人可以用。",
+      "替换文档内容或改标题。替换内容时把 doc_read 返回的 updatedAt 填进 expected_updated_at：别人在那之后改过就会拒绝，不会覆盖别人的修改。改内容要能改内容（doc_list 的 canEditContent：能编辑的人，或文档设成了能看的人都能改）；改标题只有能编辑这份文档的人可以。",
     group: "documents",
     needs: null,
     ...change,

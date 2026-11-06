@@ -30,7 +30,8 @@ import { toRequestSummary } from "./library.service";
 /**
  * Who may change which document. Edit rights are assigned per document: by the
  * owner, or by an admin who is an editor of that document. Anyone who can read
- * a document and cannot change it may ask for the right; the people who can
+ * a document and cannot change it may ask for the right (unless it is open to
+ * its readers, when they can change its content already); the people who can
  * hand it out then approve or deny.
  */
 
@@ -156,12 +157,14 @@ export async function requestEdit(
   const access = await loadReadable(db, actor, input.documentPublicId);
   const { row } = access;
 
-  if (access.canEdit) {
+  if (access.canEditContent) {
     throw new HubError("CONFLICT", "你已经可以修改这份文档了");
   }
   const hasPendingRequest =
     (await findPendingRequest(db, row.id, access.userId)) !== null;
-  if (!canRequestEdit({ canRead: true, canEdit: false, hasPendingRequest })) {
+  if (
+    !canRequestEdit({ canRead: true, canEditContent: false, hasPendingRequest })
+  ) {
     throw new HubError("CONFLICT", "你已经申请过了，请等待管理员处理");
   }
 

@@ -161,6 +161,8 @@ export const documentsRouter = createTRPCRouter({
         description: z.string().max(2000).nullish(),
         folderPublicId: id.nullish(),
         audience: audienceInput.optional(),
+        /** Who can change the content: the assigned editors, or every reader. */
+        editAccess: z.enum(["assigned", "readers"]).optional(),
       }),
     )
     .mutation(({ ctx, input }) =>

@@ -7,6 +7,7 @@ import { departmentsOfUser } from "../departments/department.repo";
 import { listMemberships } from "../kan/accounts.gateway";
 import { HubError } from "../shared/errors";
 import {
+  canEditContent,
   canEditDocument,
   canManageEditors,
   canReadDocument,
@@ -19,7 +20,13 @@ export interface DocumentAccess {
   row: DocumentRow;
   userId: string;
   isEditor: boolean;
+  /** May change its details, who reads and edits it, and delete it. */
   canEdit: boolean;
+  /**
+   * May rewrite its content: `canEdit`, or anyone when it is open to its
+   * readers (everyone with an access has passed the read check).
+   */
+  canEditContent: boolean;
   canManage: boolean;
 }
 
@@ -35,11 +42,17 @@ export function accessFor(
   userId: string,
   editor: boolean,
 ): DocumentAccess {
+  const canEdit = canEditDocument({ role: actor.role, isEditor: editor });
   return {
     row,
     userId,
     isEditor: editor,
-    canEdit: canEditDocument({ role: actor.role, isEditor: editor }),
+    canEdit,
+    canEditContent: canEditContent({
+      canEdit,
+      canRead: true,
+      readersCanEdit: row.readersCanEdit,
+    }),
     canManage: canManageEditors({ role: actor.role, isEditor: editor }),
   };
 }
@@ -104,6 +117,12 @@ export async function loadReadable(
 
 export function requireEdit(access: DocumentAccess): void {
   if (!access.canEdit) {
+    throw new HubError("FORBIDDEN", "你没有修改这份文档的权限，可以先申请");
+  }
+}
+
+export function requireEditContent(access: DocumentAccess): void {
+  if (!access.canEditContent) {
     throw new HubError("FORBIDDEN", "你没有修改这份文档的权限，可以先申请");
   }
 }

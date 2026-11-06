@@ -208,6 +208,36 @@ export function canEditDocument(input: {
 }
 
 /**
+ * Who can change a document's content: only its owner and the people it was
+ * assigned to, or also everyone who can read it (能看的人都能改). Opening it to
+ * readers is about the content alone; its details, who reads it, who edits it
+ * and deleting it stay with the people `canEditDocument` allows.
+ */
+export type EditAccess = "assigned" | "readers";
+
+/**
+ * Stored as the `readersCanEdit` switch. A document only its editors can read
+ * has no other readers to open it to, so it is always `assigned`.
+ */
+export function editAccessOf(input: {
+  audience: Audience;
+  readersCanEdit: boolean;
+}): EditAccess {
+  return input.readersCanEdit && input.audience !== "editors"
+    ? "readers"
+    : "assigned";
+}
+
+/** Rewriting the content: the editors, and every reader when it is open to them. */
+export function canEditContent(input: {
+  canEdit: boolean;
+  canRead: boolean;
+  readersCanEdit: boolean;
+}): boolean {
+  return input.canEdit || (input.readersCanEdit && input.canRead);
+}
+
+/**
  * Handing out edit rights and deciding requests: owners, and admins who are
  * themselves editors of the document. A member who was granted edit cannot
  * pass it on.
@@ -327,10 +357,14 @@ export function readerTargetKey(target: ReaderTarget): string {
     : `group:${target.workspaceId}:${target.departmentId ?? ""}`;
 }
 
+/**
+ * Asking for the right to change a document. Someone who can already change
+ * its content, because it is open to its readers, has nothing to ask for.
+ */
 export function canRequestEdit(input: {
   canRead: boolean;
-  canEdit: boolean;
+  canEditContent: boolean;
   hasPendingRequest: boolean;
 }): boolean {
-  return input.canRead && !input.canEdit && !input.hasPendingRequest;
+  return input.canRead && !input.canEditContent && !input.hasPendingRequest;
 }

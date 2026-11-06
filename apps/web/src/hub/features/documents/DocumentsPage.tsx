@@ -229,7 +229,7 @@ export function DocumentsPage() {
                               </p>
                             )}
                             <div className="mt-1 flex gap-1.5">
-                              {doc.canEdit && (
+                              {doc.canEditContent && (
                                 <Pill tone="strong">{text.badges.canEdit}</Pill>
                               )}
                               {doc.audience === "selected" && (

@@ -12,6 +12,7 @@ import { HubError } from "../shared/errors";
 import { audienceSchema, resolveAudience } from "./audience.service";
 import { loadReadable, requireEdit } from "./document.guard";
 import {
+  audienceOf,
   contentDisposition,
   DESCRIPTION_MAX_LENGTH,
   normaliseName,
@@ -91,6 +92,8 @@ const updateSchema = z.object({
    * 指定的人 stays that way).
    */
   readable: z.boolean().optional(),
+  /** Who can change the content: the assigned editors, or every reader too. */
+  editAccess: z.enum(["assigned", "readers"]).optional(),
 });
 
 export async function updateDocument(
@@ -149,7 +152,28 @@ export async function updateDocument(
     (audience.readable !== row.readable || !sameTargets(audience.targets));
   if (audienceChanged) patch.readable = audience.readable;
 
-  if (changes.length === 0 && !audienceChanged) return;
+  // Opening the content to its readers needs readers besides the editors, so
+  // it is switched off with them (能看的人都能改 never outlives 谁能看).
+  const audienceAfter = audienceChanged
+    ? audienceOf({
+        readable: audience.readable,
+        hasReaders: audience.targets.length > 0,
+      })
+    : audienceOf({ readable: row.readable, hasReaders: before.length > 0 });
+  if (input.editAccess === "readers" && audienceAfter === "editors") {
+    throw new HubError(
+      "INVALID_INPUT",
+      "只有能修改的人能看时，没有别人可以放开修改；先把「谁能看」改成所有成员或指定的人",
+    );
+  }
+  const readersCanEdit =
+    (input.editAccess === undefined
+      ? row.readersCanEdit
+      : input.editAccess === "readers") && audienceAfter !== "editors";
+  const editAccessChanged = readersCanEdit !== row.readersCanEdit;
+  if (editAccessChanged) patch.readersCanEdit = readersCanEdit;
+
+  if (changes.length === 0 && !audienceChanged && !editAccessChanged) return;
 
   await db.transaction(async (tx) => {
     await updateDocumentRow(tx, row.id, patch, now);
@@ -171,6 +195,17 @@ export async function updateDocument(
         entityId: row.publicId,
         summary: `「${row.title}」${audience.summary}`,
         detail: audience.chosen,
+      });
+    }
+    if (editAccessChanged) {
+      await recordAudit(tx, {
+        actor,
+        action: "document.edit_access_changed",
+        entityType: "document",
+        entityId: row.publicId,
+        summary: readersCanEdit
+          ? `「${row.title}」设为能看的人都能改内容`
+          : `「${row.title}」设为只有所有者和被指派的人能改`,
       });
     }
   });

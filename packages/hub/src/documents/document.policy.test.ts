@@ -4,11 +4,13 @@ import { departmentRef } from "../departments/department.policy";
 import {
   audienceOf,
   canCreateDocument,
+  canEditContent,
   canEditDocument,
   canManageEditors,
   canReadDocument,
   canRequestEdit,
   contentDisposition,
+  editAccessOf,
   FOLDER_MAX_DEPTH,
   importSizeProblem,
   inspectFile,
@@ -176,11 +178,43 @@ describe("who may do what", () => {
   });
 
   it("lets a reader who cannot edit ask once", () => {
-    const base = { canRead: true, canEdit: false, hasPendingRequest: false };
+    const base = {
+      canRead: true,
+      canEditContent: false,
+      hasPendingRequest: false,
+    };
     expect(canRequestEdit(base)).toBe(true);
-    expect(canRequestEdit({ ...base, canEdit: true })).toBe(false);
+    expect(canRequestEdit({ ...base, canEditContent: true })).toBe(false);
     expect(canRequestEdit({ ...base, canRead: false })).toBe(false);
     expect(canRequestEdit({ ...base, hasPendingRequest: true })).toBe(false);
+  });
+});
+
+describe("edit access", () => {
+  it("opens the content to readers only while someone else can read it", () => {
+    expect(editAccessOf({ audience: "all", readersCanEdit: true })).toBe(
+      "readers",
+    );
+    expect(editAccessOf({ audience: "selected", readersCanEdit: true })).toBe(
+      "readers",
+    );
+    expect(editAccessOf({ audience: "editors", readersCanEdit: true })).toBe(
+      "assigned",
+    );
+    expect(editAccessOf({ audience: "all", readersCanEdit: false })).toBe(
+      "assigned",
+    );
+  });
+
+  it("lets editors change the content, and readers when it is open", () => {
+    const reader = { canEdit: false, canRead: true, readersCanEdit: false };
+    expect(canEditContent(reader)).toBe(false);
+    expect(canEditContent({ ...reader, readersCanEdit: true })).toBe(true);
+    expect(canEditContent({ ...reader, canEdit: true })).toBe(true);
+    // Open to readers, but this person is not one.
+    expect(
+      canEditContent({ ...reader, canRead: false, readersCanEdit: true }),
+    ).toBe(false);
   });
 });
 

@@ -9,7 +9,11 @@ import type { DocumentStorage } from "./storage";
 import { withAudit } from "../audit";
 import { HubError } from "../shared/errors";
 import { audienceSchema, resolveAudience } from "./audience.service";
-import { loadReadable, requireEdit, requireUserId } from "./document.guard";
+import {
+  loadReadable,
+  requireEditContent,
+  requireUserId,
+} from "./document.guard";
 import {
   canCreateDocument,
   DESCRIPTION_MAX_LENGTH,
@@ -149,6 +153,7 @@ export async function createTextDocument(
           sha256: createHash("sha256").update(bytes).digest("hex"),
           storageKey: key,
           readable: audience?.readable ?? input.readable ?? true,
+          readersCanEdit: false,
           uploadedBy: userId,
           now,
         });
@@ -206,7 +211,8 @@ export async function readTextContent(
 }
 
 /**
- * Replaces the content of a text document. Needs the right to change it. The
+ * Replaces the content of a text document. Needs the right to change its
+ * content: an editor's, or a reader's when it is open to them. The
  * old object is removed once the new one is in place, so a failure never
  * leaves the document pointing at nothing.
  */
@@ -220,7 +226,7 @@ export async function replaceTextContent(
   const store = requireStorage(storage);
   const input = parse(replaceSchema, rawInput);
   const access = await loadReadable(db, actor, input.documentPublicId);
-  requireEdit(access);
+  requireEditContent(access);
   const { row } = access;
   if (!previewKindOf(row.ext)) {
     // A document from before the library held Markdown and HTML only (a

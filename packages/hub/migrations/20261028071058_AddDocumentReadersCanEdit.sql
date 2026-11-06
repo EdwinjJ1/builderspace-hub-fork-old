@@ -1,0 +1,1 @@
+ALTER TABLE "hub_document" ADD COLUMN "readersCanEdit" boolean DEFAULT false NOT NULL;

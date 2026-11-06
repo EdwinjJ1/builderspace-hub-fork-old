@@ -288,6 +288,54 @@ describe("documents", () => {
     ).toEqual({ ok: false, message: "没有要改的内容" });
   });
 
+  it("lets a reader change the content of a document open to readers, and refuses a title change without writing anything", async () => {
+    const created = await value(owner, "doc_create", {
+      title: "营销灵感",
+      content: "# 素材\n",
+      audience: "all",
+    });
+    await createMcpCaller(db, asUser(owner)).hub.documents.update({
+      documentPublicId: created.publicId as string,
+      editAccess: "readers",
+    });
+
+    const listed = (await value(member, "doc_list")).documents as {
+      editAccess: string;
+      canEdit: boolean;
+      canEditContent: boolean;
+    }[];
+    expect(listed).toMatchObject([
+      { editAccess: "readers", canEdit: false, canEditContent: true },
+    ]);
+    const read = await value(member, "doc_read", {
+      document: created.publicId,
+    });
+    expect(read).toMatchObject({ editAccess: "readers", canEditText: true });
+
+    expect(
+      await refusal(member, "doc_update", {
+        document: created.publicId,
+        content: "# 素材\n\n- 不该存进去\n",
+        title: "别的标题",
+      }),
+    ).toContain("这次什么都没改");
+    expect(
+      await value(owner, "doc_read", { document: created.publicId }),
+    ).toMatchObject({ title: "营销灵感", content: "# 素材\n" });
+
+    expect(
+      await value(member, "doc_update", {
+        document: created.publicId,
+        content: "# 素材\n\n- 好钩子\n",
+        expected_updated_at: read.updatedAt,
+      }),
+    ).toEqual({
+      publicId: created.publicId,
+      contentChanged: true,
+      titleChanged: false,
+    });
+  });
+
   it("shares a document with one department of a project, and only its people read it", async () => {
     const colleague = await seedUser(db, { email: "colleague@example.test" });
     await ensureProjectMemberForTests(db, colleague, club.id, "member");

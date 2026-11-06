@@ -127,6 +127,37 @@ describe("changing", () => {
     ).rejects.toBeDefined();
   });
 
+  it("opens the content to every reader with editAccess, and only the content", async () => {
+    const doc = await create();
+    const patched = await call(owner, "PATCH", `/${doc.publicId}`, {
+      editAccess: "readers",
+    });
+    expect(patched.body).toMatchObject({
+      editAccess: "readers",
+      canEdit: true,
+      canEditContent: true,
+    });
+
+    expect((await call(member, "GET", `/${doc.publicId}`)).body).toMatchObject({
+      editAccess: "readers",
+      canEdit: false,
+      canEditContent: true,
+    });
+    expect(
+      (
+        await call(member, "PUT", `/${doc.publicId}/content`, {
+          content: "成员加的",
+        })
+      ).body,
+    ).toEqual({ changed: true });
+    await expect(
+      call(member, "PATCH", `/${doc.publicId}`, { title: "x" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      call(owner, "PATCH", `/${doc.publicId}`, { editAccess: "everyone" }),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+
   it("refuses a content save made on a stale copy", async () => {
     const doc = await create();
     const opened = (await call(owner, "GET", `/${doc.publicId}/content`))

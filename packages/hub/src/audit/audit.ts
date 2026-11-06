@@ -51,6 +51,7 @@ export type AuditAction =
   | "document.updated"
   | "document.file_replaced"
   | "document.readable_changed"
+  | "document.edit_access_changed"
   | "document.deleted"
   | "document.editor_granted"
   | "document.editor_revoked"

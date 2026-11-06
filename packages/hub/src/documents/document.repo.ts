@@ -150,6 +150,7 @@ export type DocumentPatch = Partial<
     | "description"
     | "folderId"
     | "readable"
+    | "readersCanEdit"
     | "filename"
     | "ext"
     | "contentType"
