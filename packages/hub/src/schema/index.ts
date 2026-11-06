@@ -13,3 +13,4 @@ export * from "./departments";
 export * from "./forms";
 export * from "./nudges";
 export * from "./mcp";
+export * from "./archived-tasks";

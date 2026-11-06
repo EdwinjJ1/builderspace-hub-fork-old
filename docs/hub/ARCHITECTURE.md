@@ -85,6 +85,16 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 - **发信用 Hub 自己的变量。** `mail/` 只认 `HUB_RESEND_API_KEY`（以及可选的 `HUB_MAIL_FROM`、`HUB_MAIL_REPLY_TO`）。Kan 读的是 `SMTP_*` 和 `EMAIL_FROM`，设了会打开 Kan 自己的邀请和魔法链接邮件，绕过注册闸门，所以不用那几个名字。没设 key 时什么都不发，页面说明原因。
 - **在 Supabase 表格里直接改状态不会触发**，因为那不经过 Hub。这类录取，以及只有「名单」的人改的、配好发信之前录取的，用命令行 `mail-links` 补发（`site.service.ts` 的 `mailAcceptedApplicants`）：它扫一遍「已录取」，只给从没发过链接、也没注册的地址发，同一个地址只发一封，两封之间隔 0.6 秒（Resend 每秒最多两封），所以可以反复跑。链接过期的人只列出来不重发，重发要 `--email` 点名，这时和卡片上的「重发」一样会替换旧链接。命令行以所有者身份发许可，日志的操作人记为 `cli`。
 
+### 邮箱
+
+后台 → 官网 → 邮箱（`/admin/site/inbox`）读 Resend 收到的信，代码在 `packages/hub/src/inbox/`。
+
+- **不存信。** 列表和正文每次都从 Resend 的 `/emails/receiving` 现取（`inbox.resend.ts`），Hub 没有表、没有 webhook。Resend 删了的（免费版 30 天）这里也就没了。翻页用 Resend 的游标（`after` = 上一页最后一封的 id），所以只有「较新 / 较旧」，没有页码。
+- **权限是 `hub_account.mailAccess`**，和 `siteAccess` 一样由所有者逐人设置，和后台角色、官网权限都无关。`hubInboxProcedure` 先查它和 key，用例里再查一次；附件路由不走 tRPC，自己查一遍。
+- **单独的 key。** 读收件要 Full access，发信用的 `HUB_RESEND_API_KEY` 应该只有 Sending access，所以邮箱用 `HUB_RESEND_INBOX_API_KEY`。
+- **HTML 的隔离**都在 `inbox.policy.ts`（浏览器和测试共用）：`MAIL_FRAME_SANDBOX` 不含 `allow-scripts` 和 `allow-same-origin`；`mailFrameDocument` 把我们的 CSP 放在信的前面（信里自带的 CSP 只能更严），去掉 `meta refresh`，远程图片要点了才放开。
+- **附件**的下载链接会过期，页面链到 `/api/hub/inbox/<信>/attachments/<附件>`，点的时候才向 Resend 要新链接，再 302 过去。带 content id 的内嵌图片已经显示在正文里，不列为附件。
+
 ## 首页与大看板
 
 `packages/hub/src/tasks/` 负责首页（`/home`）和跨项目大看板（`/tasks/<视图>`）。两者都有一个「范围」：「全部」或某一个项目，写在 URL 的 `?project=` 里。
@@ -93,9 +103,23 @@ Hub 的表都以 `hub_` 开头，定义在 `packages/hub/src/schema/`，迁移�
 - **阶段和职能按名字识别**（`task.policy.ts`）：列名对上「待办 / 进行中 / 待验收 / 已完成」（以及 Kan 模板的英文列名）就进对应的列，对不上的进「其他」；看板名对上「开发 / 运营 / 营销」就算对应职能。标准名字只在 `@kan/builderspace/structure` 里写一次。
 - **切换项目在首页做**。侧栏顶部的 `HubSidebarTop` 替换了 Kan 的 `WorkspaceMenu`，只显示当前项目（点击回首页），保留搜索和 ⌘K。Kan 把「当前项目」存在浏览器里，看板页和卡片页都读它，所以首页选中某个项目时会同步过去（`useFollowScope`），从「全部」打开别的项目的卡片前也会先切换（`useOpenInProject`）。
 - **首页即总版**：首页的分类卡片和「我负责的任务」下面，直接嵌入当前范围的总版（`TaskBoardBody`，和 `/tasks/all` 是同一个组件、同一份数据），可以就地编辑。
-- **总版**：某个项目的「全部」视图就是这个项目的总版，Kan 的看板页上第一块就是它的入口（`OverallBoardTile`）。总版里的卡片按职能着色；有编辑权限的人可以把任务拖到另一列、改截止日期、新建任务（选放到哪个职能、哪一列，可勾「指派给我」）。这些操作都直接调用 Kan 自己的 `card.update` / `card.create`：卡片本来就是小看板上的那一张，所以小看板、首页「我负责的任务」立即同步，Kan 也照常校验权限、写卡片活动记录。拖动时按目标看板里对应阶段的列来移，没有那一列就提示，不会移到别的看板。
+- **总版**：某个项目的「全部」视图就是这个项目的总版，Kan 的看板页上第一块就是它的入口（`OverallBoardTile`）。总版里的卡片按职能着色；有编辑权限的人可以把任务拖到另一列、改截止日期、新建任务（选放到哪个职能、哪一列，可勾「指派给我」）。这些操作都直接调用 Kan 自己的 `card.update` / `card.create`：卡片本来就是小看板上的那一张，所以小看板、首页「我负责的任务」立即同步，Kan 也照常校验权限、写卡片活动记录。拖动时按任务所在看板里对应阶段的列来移，不会移到别的看板。列名按 `task.policy.ts` 的 `stageOf` 认（标准名、Kan 模板的英文名，以及「完成」= 已完成）。自己建的看板可能缺某一列（比如没有「待验收」）：拖进去时先用 Kan 的 `list.create` 在那块看板上加这一列，再用 `list.update` 挪到列序里的位置（`missingListIndex`：排在后一个阶段的第一列前面，例如「进行中」和「已完成」之间），然后移卡片；加列要有 Kan 的 `list:create`（`tasks.board` 的 `access.canAddLists`），没有就提示。
 - **只看我的**：大看板和首页的总版上有「只看我的」开关，打开后只留下指派给我的任务（`tasks.board` 的 `onlyMine`，规则在 `task.policy.ts` 的 `onBoard`）。先筛选再计数、再截「已完成」列，所以列头的数字和「已完成」的条数都是我自己的。大看板把它写在 URL 的 `?assigned=me` 里，切换项目时带着；首页的放在页面状态里，切换范围也保留。「指派给我的」视图本来就只有自己的任务，不显示这个开关。
 - **职能颜色**存在 `hub_setting` 表（`settings/`），后台「职能颜色」页修改，所有登录的人都能读；读到的值不合法时按职能退回默认色。
+
+## 归档与自动清理
+
+`packages/hub/src/archived-tasks/` 负责总版上的「归档」和「删除」，以及已完成任务的自动归档、归档任务的自动删除（2026-10-26 加）。和「我完成的」（`archive/`，个人的完成记录）不是一回事。
+
+- **归档是 Hub 的表**：Kan 的卡片只有软删除，没有归档。`hub_archived_card` 一张卡片一行：`archivedAt` 有值就在归档里，从所有看板上消失；`automatic` 区分自动和手动；恢复时清掉 `archivedAt`、记下 `restoredAt`。卡片被物理删除时这一行跟着删（外键 cascade）。
+- **在哪里看不到**：`listTaskRows` 默认不返回归档里的卡片，所以总版、首页计数和「我负责的任务」、催一下、MCP 都看不到。Kan 自己的看板页（`board.byId`）和公开看板页（`board.bySlug`）靠 `board.ts` / `board.repo.ts` 的接缝在 SQL 里去掉它们（`hiddenCardIds`，按项目取，见上游接缝）。Kan 的卡片页照样能打开归档里的卡片。
+- **谁能做**：归档和恢复要能看到这张卡片（`boardVisibleTo`，私有看板照旧）并且有 `card:edit`，和拖动一样；删除直接用 Kan 的 `card.delete`（`card:delete` 或者卡片是自己建的），Kan 照常写活动、发 webhook；总版和归档页按同一条规则逐个任务决定显不显示「删除」（`Task.canDelete`）。总版卡片右上角的「⋯」里有「归档」「删除」，删除要再点一次「确定删除」；归档后底部提示条有 10 秒的「撤销」。`/tasks/archived` 列出范围内归档的任务，可以恢复或删除（同样要确认）。
+- **自动规则**（`archived-task.policy.ts`）：在「已完成」列里放满 3 天（`ARCHIVE_AFTER_DAYS`，从最后一次移进已完成算，取自卡片活动，和「我完成的」用的是同一个 `completionsOf`）自动归档；恢复过的任务从恢复那一刻重新算 3 天。在归档里放满 7 天（`DELETE_AFTER_DAYS`，从进归档那一刻算，自动和手动一样）自动删除。模板看板、已归档的 Kan 看板都不处理（看板恢复后，满期的卡片在下一次清理时删掉）。清理先不加锁挑出候选，写之前在一个事务里锁住这些卡片、重新读列和活动再判断一次（`archiveIfStillDue`），所以中间被移出「已完成」、或移出又移回的任务不会被收走。
+- **没有定时任务**：首页、总版、归档页的接口先调用 `tidyBeforeShowingTasks`，它用 `hub_rate_limit`（key `hub:tidy-tasks`）保证全站一小时最多跑一次，跑失败只记日志、不影响页面。所以状态最多晚一小时；长期没人打开页面就不会动，打开时立刻补上。删除是第一次被扫到的时候，所以归档满 7 天后一小时内删掉，而不是精确到秒。
+- **自动删除走 Kan 的 `cardRepo.softDelete`**（Hub 不直接写 Kan 的表），`deletedBy` 为空，表示不是哪个人删的；不发 webhook（那在 Kan 的路由里）。`hub_archived_card.autoDeletedAt` 记下这件事。每张卡片单独一个事务：先锁住卡片和它的归档行并重新确认还该删（`lockExpiredArchivedCard`），再删、再打标记、再写日志。所以清理扫到名单之后有人恢复了、或者在 Kan 里手动删了，这张就不由清理删、也不记成自动删除；清理先锁住了，后到的恢复或删除会等它做完，然后发现已经没事可做。为此 Kan 的 `softDelete` 是在 Hub 的事务里调用的（它自己的事务变成保存点）。看板后来被归档的卡片同样不删。
+- **操作日志**：手动归档、恢复，自动归档、自动删除都写（`task.archived` / `task.restored` / `task.auto_archived` / `task.auto_deleted`），自动的操作人是 `auto-tidy`，后台显示「自动清理」。日志只记卡片的 public id，不写任务标题：后台管理员能读日志，而任务可能在他们看不到的私有看板上。不写 Kan 的卡片活动：活动类型是 Kan 的 Postgres 枚举，没有「从归档恢复」，加的话要改上游的迁移；Kan 自己的 `card.archived` 意思是删除。
+- **「我完成的」不受影响**：它照样统计归档里和被自动删掉的已完成任务（`getVisibleTasks` 把两者都带上），被删掉的那条显示「已从归档清理」、点不开。手动删掉的任务和以前一样从「我完成的」里消失。个人日程里已经排过的时间块保留，任务被自动删除后也保留（`getMyTasks` 和 `publicIdsOfCards` 都认被清理删掉的卡片）；但归档里的任务不再出现在「待安排」里，也不能再排。手动删掉的任务，时间块和以前一样不显示。
+- **已知的小毛病**：归档的卡片仍占着 Kan 列表里的 `index`，在 Kan 的小看板里拖动排序时，位置可能差一格（Kan 按看得到的卡片算位置）。只在有归档卡片的列里出现，再拖一次就好。
 
 ## 项目权限与「没权限就不显示」
 

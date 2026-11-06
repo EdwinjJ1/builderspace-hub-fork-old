@@ -137,7 +137,8 @@ export async function getSchedule(
       return block ? [block] : [];
     }),
     openTasks: myTasks
-      .filter((task) => task.stage !== "done")
+      // A task the clean-up deleted is still marked as archived.
+      .filter((task) => task.stage !== "done" && task.archivedAt === null)
       .map((task) => ({ task, planned: plannedPublicIds.has(task.publicId) })),
   };
 }
@@ -202,6 +203,9 @@ export async function planTask(
   }
   if (task.stage === "done") {
     throw new HubError("INVALID_INPUT", "这个任务已经完成，不用再排时间了。");
+  }
+  if (task.archivedAt) {
+    throw new HubError("INVALID_INPUT", "这个任务在归档里，先恢复再排时间。");
   }
 
   const cardId = await cardIdOf(db, data.cardPublicId);

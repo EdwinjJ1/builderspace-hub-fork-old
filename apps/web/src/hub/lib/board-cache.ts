@@ -74,3 +74,21 @@ export function withTaskDue(
     })),
   };
 }
+
+/** The board without one task, once it went to 归档 or was deleted. Pure. */
+export function withTaskRemoved(board: Board, taskPublicId: string): Board {
+  return {
+    ...board,
+    columns: board.columns.map((column) =>
+      column.tasks.some((task) => task.publicId === taskPublicId)
+        ? {
+            ...column,
+            tasks: column.tasks.filter(
+              (task) => task.publicId !== taskPublicId,
+            ),
+            total: column.total - 1,
+          }
+        : column,
+    ),
+  };
+}

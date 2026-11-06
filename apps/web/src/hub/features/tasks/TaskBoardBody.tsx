@@ -1,4 +1,5 @@
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import Link from "next/link";
 import {
   DndContext,
   DragOverlay,
@@ -8,21 +9,28 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { useState } from "react";
-import { TbPlus, TbSquare, TbSquareCheck } from "react-icons/tb";
+import { TbArchive, TbPlus, TbSquare, TbSquareCheck } from "react-icons/tb";
 import { twMerge } from "tailwind-merge";
 
 import type { Stage, TaskView } from "@kan/hub/public";
-import { functionKeys, functionNames, stageNames } from "@kan/hub/public";
+import {
+  ARCHIVE_AFTER_DAYS,
+  functionKeys,
+  functionNames,
+  stageNames,
+} from "@kan/hub/public";
 
 import type { HubTask } from "./task-display";
 import type { RouterOutputs } from "~/utils/api";
 import { copy } from "~/hub/copy/zh";
+import { archivedTasksHref } from "~/hub/lib/routes";
 import { useFunctionColors } from "~/hub/lib/use-function-colors";
 import { buttonClass, ErrorText } from "~/hub/ui/admin-primitives";
 import { BoardCard } from "./BoardCard";
 import { DoneToast } from "./DoneToast";
 import { NewTaskForm } from "./NewTaskForm";
 import { chipClass } from "./ScopeSwitcher";
+import { UndoToast } from "./UndoToast";
 import { useBoardActions } from "./use-board-actions";
 
 type Board = RouterOutputs["hub"]["tasks"]["board"];
@@ -36,12 +44,13 @@ function stageTitle(stage: Stage): string {
 }
 
 /**
- * The working part of a task board: the colour legend, 只看我的, 新建任务,
- * the new-task form and the columns. Shared by the board page
+ * The working part of a task board: the colour legend, 只看我的, 归档,
+ * 新建任务, the new-task form and the columns. Shared by the board page
  * (`/tasks/<view>`, where it fills the screen) and the home page (where it is
  * embedded as the 总版 of the chosen scope). Where the person may edit, tasks
- * can be dragged to another column, given a due date and created here; every
- * change goes through Kan's own card API, so it lands on the task's own board.
+ * can be dragged to another column, given a due date, put in 归档 and created
+ * here, and deleted where they may delete; every change but 归档 goes through
+ * Kan's own card API, so it lands on the task's own board.
  */
 export function TaskBoardBody({
   board,
@@ -81,6 +90,17 @@ export function TaskBoardBody({
           {onOnlyMineChange && query.view !== "mine" && (
             <OnlyMineToggle pressed={onlyMine} onChange={onOnlyMineChange} />
           )}
+          <Link
+            href={archivedTasksHref(board.scope.current?.publicId)}
+            title={text.archived.linkHint(ARCHIVE_AFTER_DAYS)}
+            className={twMerge(
+              chipClass(false),
+              "inline-flex items-center gap-1.5",
+            )}
+          >
+            <TbArchive className="h-4 w-4" aria-hidden="true" />
+            {text.archived.link}
+          </Link>
           {canCreateSomewhere && (
             <button
               type="button"
@@ -129,9 +149,12 @@ export function TaskBoardBody({
         busy={switching}
         onMove={actions.move}
         onSetDue={actions.setDue}
+        onArchive={actions.archive}
+        onDelete={actions.remove}
         onAdd={canCreateSomewhere ? setFormStage : undefined}
       />
       <DoneToast toast={actions.doneToast} onClose={actions.dismissDoneToast} />
+      <UndoToast notice={actions.notice} onClose={actions.dismissNotice} />
     </div>
   );
 }
@@ -187,6 +210,8 @@ function Columns({
   busy,
   onMove,
   onSetDue,
+  onArchive,
+  onDelete,
   onAdd,
 }: {
   board: Board;
@@ -195,6 +220,8 @@ function Columns({
   busy: boolean;
   onMove: (task: HubTask, to: Stage) => Promise<void>;
   onSetDue: (task: HubTask, dueDate: Date | null) => void;
+  onArchive: (task: HubTask) => void;
+  onDelete: (task: HubTask) => void;
   onAdd?: (stage: OpenStage) => void;
 }) {
   // A small distance before a drag starts keeps plain clicks opening the card.
@@ -236,6 +263,8 @@ function Columns({
             fill={fill}
             canEdit={canEdit}
             onSetDue={onSetDue}
+            onArchive={onArchive}
+            onDelete={onDelete}
             onAdd={onAdd}
           />
         ))}
@@ -254,12 +283,16 @@ function TaskColumn({
   fill,
   canEdit,
   onSetDue,
+  onArchive,
+  onDelete,
   onAdd,
 }: {
   column: Column;
   fill: boolean;
   canEdit: (task: HubTask) => boolean;
   onSetDue: (task: HubTask, dueDate: Date | null) => void;
+  onArchive: (task: HubTask) => void;
+  onDelete: (task: HubTask) => void;
   onAdd?: (stage: OpenStage) => void;
 }) {
   // "Other" holds renamed lists; there is no single list to move a task into.
@@ -300,6 +333,11 @@ function TaskColumn({
           )}
         </span>
       </h2>
+      {stage === "done" && (
+        <p className="px-2 pb-1 text-xs text-light-800 dark:text-dark-800">
+          {text.archived.doneHint(ARCHIVE_AFTER_DAYS)}
+        </p>
+      )}
       {limited && (
         <p className="px-2 pb-1 text-xs text-light-900 dark:text-dark-900">
           {text.doneLimited(column.tasks.length, column.total)}
@@ -317,6 +355,8 @@ function TaskColumn({
               task={task}
               canEdit={canEdit(task)}
               onSetDue={onSetDue}
+              onArchive={canEdit(task) ? onArchive : undefined}
+              onDelete={task.canDelete ? onDelete : undefined}
             />
           ))
         )}

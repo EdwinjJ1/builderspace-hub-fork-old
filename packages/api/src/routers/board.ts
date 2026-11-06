@@ -27,6 +27,7 @@ import { assertCanDelete, assertCanEdit, assertPermission } from "../utils/permi
 // hub-seam: templates are for project admins (docs/hub/UPSTREAM_SEAMS.md)
 import { assertCanCreateTemplate } from "./hub/guards";
 import { visibleBoardsOnly } from "./hub/private-boards"; // hub-seam
+import { archivedCardIds } from "./hub/archived-tasks"; // hub-seam
 
 export const boardRouter = createTRPCRouter({
   all: protectedProcedure
@@ -152,6 +153,8 @@ export const boardRouter = createTRPCRouter({
           lists: input.lists ?? [],
           dueDate: dueDateFilters,
           type: input.type,
+          // hub-seam: cards in 归档 stay off the board
+          hiddenCardIds: await archivedCardIds(ctx.db, board.workspaceId),
         },
       );
 
@@ -283,6 +286,8 @@ export const boardRouter = createTRPCRouter({
           labels: input.labels ?? [],
           lists: input.lists ?? [],
           dueDate: dueDateFilters,
+          // hub-seam: cards in 归档 stay off the board
+          hiddenCardIds: await archivedCardIds(ctx.db, workspace.id),
         },
       );
 

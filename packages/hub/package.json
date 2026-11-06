@@ -16,6 +16,10 @@
       "types": "./src/archive/index.ts",
       "default": "./src/archive/index.ts"
     },
+    "./archived-tasks": {
+      "types": "./src/archived-tasks/index.ts",
+      "default": "./src/archived-tasks/index.ts"
+    },
     "./audit": {
       "types": "./src/audit/index.ts",
       "default": "./src/audit/index.ts"
@@ -35,6 +39,10 @@
     "./documents/file-import": {
       "types": "./src/documents/file-import.ts",
       "default": "./src/documents/file-import.ts"
+    },
+    "./inbox": {
+      "types": "./src/inbox/index.ts",
+      "default": "./src/inbox/index.ts"
     },
     "./forms": {
       "types": "./src/forms/index.ts",

@@ -17,9 +17,18 @@ export const hubRoutes = {
   join: HUB_JOIN_PATH,
 } as const;
 
-/** Where the back office starts for someone: the 官网 section if that is all they have. */
-export function adminHome(role: HubRole | null): string {
-  return can(role, "admin.view") ? "/admin" : "/admin/site";
+/**
+ * Where the back office starts for someone: the 官网 section if that is all
+ * they have, the mailbox if only that.
+ */
+export function adminHome(access: {
+  role: HubRole | null;
+  siteAccess: unknown;
+  mailAccess: boolean;
+}): string {
+  if (can(access.role, "admin.view")) return "/admin";
+  if (!access.siteAccess && access.mailAccess) return "/admin/site/inbox";
+  return "/admin/site";
 }
 
 /** The home page, scoped to one project or (no id) to 全部. */
@@ -40,6 +49,11 @@ export function taskBoardHref(
   if (!onlyMine) return path;
   const separator = path.includes("?") ? "&" : "?";
   return `${path}${separator}${onlyMineParam.name}=${onlyMineParam.value}`;
+}
+
+/** 归档, scoped like the task board. */
+export function archivedTasksHref(projectPublicId?: string | null): string {
+  return withProject("/tasks/archived", projectPublicId);
 }
 
 export function cardHref(cardPublicId: string): string {

@@ -5,6 +5,7 @@ import {
   keepWhileSwitchingMine,
   withTaskDue,
   withTaskMoved,
+  withTaskRemoved,
 } from "./board-cache";
 
 type Board = RouterOutputs["hub"]["tasks"]["board"];
@@ -81,5 +82,20 @@ describe("withTaskDue", () => {
 
     expect(after.columns[0]?.tasks[0]?.dueDate).toBe(due);
     expect(after.columns[0]?.tasks[1]?.dueDate).toBeNull();
+  });
+});
+
+describe("withTaskRemoved", () => {
+  it("takes the task out of its column and fixes the total", () => {
+    const after = withTaskRemoved(board, "a");
+
+    expect(after.columns[0]?.tasks.map((t) => t.publicId)).toEqual(["b"]);
+    expect(after.columns[0]?.total).toBe(1);
+    expect(after.columns[1]).toBe(board.columns[1]);
+  });
+
+  it("changes no totals for an unknown task", () => {
+    const after = withTaskRemoved(board, "zz");
+    expect(after.columns.map((c) => c.total)).toEqual([2, 0]);
   });
 });

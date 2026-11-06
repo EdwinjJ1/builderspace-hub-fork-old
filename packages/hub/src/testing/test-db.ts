@@ -112,6 +112,7 @@ export async function seedHubAccount(
   facts: {
     role?: HubRole | null;
     siteAccess?: SiteAccess | null;
+    mailAccess?: boolean;
     status?: AccountStatus;
   },
 ): Promise<void> {
@@ -119,6 +120,7 @@ export async function seedHubAccount(
 }
 
 export { overrideSiteDbForTests } from "../site/site.db";
+export { overrideInboxForTests } from "../inbox/inbox.resend";
 export {
   createSiteTestDb,
   seedSiteJoin,

@@ -77,6 +77,8 @@ EchoAgent       →   技术 / 活动 / 运营
 
 另有一项**官网权限**，和上面的角色、后台角色都无关，由所有者在 后台 → 账号 里逐人设置：「名单」能看志愿者申请和加入登记、改志愿者的状态和备注；「管理」在此之外还能审核官网的项目卡和项目进展。没有设置的人（包括所有者自己）看不到官网的数据。
 
+**邮箱权限**也是这样单独的一项，和官网权限并列：打开后能在 后台 → 官网 → 邮箱 看发到 hello@builderspace.dev 的信。默认谁都没有，只有所有者能设置，见下文「连接邮箱」。
+
 ## 开通新成员
 
 Hub 不开放公开注册，`/signup` 只是一页说明。要让一个人注册，先给他的邮箱发一条注册许可，得到一条一次性链接，私下发给本人：
@@ -285,6 +287,36 @@ pnpm --filter @kan/hub cli:prod mail-links
 - 不要用 `vercel env run`：它会让本地 `.env` 盖过生产的值，`POSTGRES_URL` 会变成本机数据库。命令发现 `NEXT_PUBLIC_BASE_URL` 或 `POSTGRES_URL` 是本机地址时会拒绝发信，免得把打不开的链接寄出去。
 
 本地开发时把 `HUB_SITE_DATABASE_URL` 指向一个本机 Postgres 即可（本机地址不走 TLS），里面按官网的迁移建好表，测试用的最小表结构见 `packages/hub/src/testing/site-test-db.ts`。
+
+## 连接邮箱（官网分区的「邮箱」）
+
+后台 → 官网 → 邮箱 显示发到 hello@builderspace.dev（以及 builderspace.dev 下其他地址）的信：左边是列表，右边是正文和附件。信不存进 Hub，每次打开都直接问 Resend，所以能看到的就是 Resend 还保留着的（免费版 30 天）。只读，不能回信、删除或标记。读信不占 Resend 的发信额度。
+
+1. **建 key。** Resend → API Keys → Create API key，名字写 `builderspace-hub-inbox`，Permission 选 **Full access**（读收件要 Full access，Sending access 的 key 读不了）。不要用发信那把 `HUB_RESEND_API_KEY`：那把应该只有 Sending access。Full access 的 key 也能发信、改域名、建别的 key，所以只放在 Hub 的生产环境里，不要复用到别处。
+2. **环境变量（Hub 的生产环境）。**
+
+   | 变量                       | 值                            |
+   | -------------------------- | ----------------------------- |
+   | `HUB_RESEND_INBOX_API_KEY` | 第 1 步的 key，设为 sensitive |
+
+   ```bash
+   vercel env add HUB_RESEND_INBOX_API_KEY production --sensitive
+   ```
+
+   名字以 `HUB_` 开头，和 Hub 其他变量一样，不会和 Kan 自己的变量混在一起。
+
+3. **迁移。** 这项权限是 `hub_account` 上新加的一列（迁移 `AddMailAccess`），合并前对生产库跑一次 `pnpm --filter @kan/hub migrate`（见上文「部署」第 5 步）。
+4. **重新部署，再授权。** 所有者在 后台 → 账号 → 某个人 → 邮箱权限 选「可查看」（自己也要给自己开）。每次改动记进操作日志。没设变量时，有邮箱权限的人会看到「还没有连接邮箱」。
+5. **停用。** 删掉 Hub 的 `HUB_RESEND_INBOX_API_KEY`，或者在 Resend 里删掉这把 key。
+
+怎么显示一封信：
+
+- **HTML 正文只进沙箱。** 放在 `<iframe sandbox>` 里，不给 `allow-scripts`、也不给 `allow-same-origin`：信里的脚本不会运行，也碰不到 Hub 的登录状态和数据。另外加了一条 CSP，不许加载外部的样式、字体、表单和框架。链接在新标签页打开，不带来源。
+- **远程图片默认不加载**：加载会让发件人知道信被打开了。点「显示远程图片」才加载这一封的。信里内嵌的图片（Resend 已经转成 `data:`）照常显示。
+- **附件**点开时经过 Hub 的 `/api/hub/inbox/…`：先检查登录和邮箱权限，再向 Resend 要一条新的下载链接并跳过去。Resend 的下载链接会过期，所以页面上放的不是它。
+- 发件域名没通过 DMARC 验证的信，页面上会提示「可能是冒充的」。
+
+所有接口都在服务端检查邮箱权限（`packages/api/src/routers/hub/procedures.ts` 的 `hubInboxProcedure`，`packages/hub/src/inbox/inbox.service.ts` 里再查一次），API key 调不了。
 
 ## 开发约定
 

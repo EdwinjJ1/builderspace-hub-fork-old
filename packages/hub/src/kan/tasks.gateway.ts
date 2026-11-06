@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, max } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, max, or } from "drizzle-orm";
 
 import * as permissionRepo from "@kan/db/repository/permission.repo";
 import {
@@ -15,6 +15,7 @@ import {
 } from "@kan/db/schema";
 
 import type { Db } from "../db";
+import { hubArchivedCards } from "../schema";
 import { boardVisibleTo } from "./private-boards.gateway";
 
 export interface ViewableProject {
@@ -26,6 +27,9 @@ export interface ViewableProject {
   memberPublicId: string;
   canCreateTasks: boolean;
   canEditTasks: boolean;
+  canDeleteTasks: boolean;
+  /** May add a list to a board, for a column the board has none for. */
+  canCreateLists: boolean;
 }
 
 /**
@@ -80,6 +84,8 @@ export async function listViewableProjects(
         memberPublicId: membership.memberPublicId,
         canCreateTasks: permissions.includes("card:create"),
         canEditTasks: permissions.includes("card:edit"),
+        canDeleteTasks: permissions.includes("card:delete"),
+        canCreateLists: permissions.includes("list:create"),
       });
     }
   }
@@ -92,18 +98,33 @@ export interface TaskRow {
   dueDate: Date | null;
   createdAt: Date;
   updatedAt: Date | null;
+  /** Who created the card; null when that account is gone. */
+  createdBy: string | null;
   listName: string;
   boardPublicId: string;
   boardName: string;
   projectId: number;
   assignees: { userId: string | null; name: string }[];
   labels: { name: string; colourCode: string | null }[];
+  /** In 归档 since `at`; null while it is on its board. */
+  archive: { at: Date; automatic: boolean } | null;
+  /** Deleted by the clean-up after its time in 归档. */
+  autoDeleted: boolean;
+}
+
+/** Which cards `listTaskRows` returns besides the ones on the boards. */
+export interface TaskRowsIncluding {
+  /** Cards in 归档. */
+  archived?: boolean;
+  /** Cards the clean-up deleted after their time in 归档. */
+  autoDeleted?: boolean;
 }
 
 /**
  * Every live card on the ordinary boards of the given projects that the viewer
  * may see. Templates, archived boards, other people's 仅自己可见 boards and
- * anything soft-deleted are left out.
+ * anything soft-deleted are left out, and so are cards in 归档 and cards the
+ * clean-up deleted unless `including` asks for them.
  *
  * Loads everything in three queries and lets the caller filter in memory.
  * That is plenty for a team's worth of cards; if it ever is not, push the
@@ -113,6 +134,7 @@ export async function listTaskRows(
   db: Db,
   projectIds: readonly number[],
   viewerId: string,
+  including: TaskRowsIncluding = {},
 ): Promise<TaskRow[]> {
   if (projectIds.length === 0) return [];
 
@@ -124,14 +146,20 @@ export async function listTaskRows(
       dueDate: cards.dueDate,
       createdAt: cards.createdAt,
       updatedAt: cards.updatedAt,
+      createdBy: cards.createdBy,
+      deletedAt: cards.deletedAt,
       listName: lists.name,
       boardPublicId: boards.publicId,
       boardName: boards.name,
       projectId: boards.workspaceId,
+      archivedAt: hubArchivedCards.archivedAt,
+      archivedAutomatically: hubArchivedCards.automatic,
+      autoDeletedAt: hubArchivedCards.autoDeletedAt,
     })
     .from(cards)
     .innerJoin(lists, eq(lists.id, cards.listId))
     .innerJoin(boards, eq(boards.id, lists.boardId))
+    .leftJoin(hubArchivedCards, eq(hubArchivedCards.cardId, cards.id))
     .where(
       and(
         inArray(boards.workspaceId, [...projectIds]),
@@ -139,7 +167,20 @@ export async function listTaskRows(
         eq(boards.isArchived, false),
         isNull(boards.deletedAt),
         isNull(lists.deletedAt),
-        isNull(cards.deletedAt),
+        including.autoDeleted
+          ? or(
+              isNull(cards.deletedAt),
+              isNotNull(hubArchivedCards.autoDeletedAt),
+            )
+          : isNull(cards.deletedAt),
+        // A card the clean-up deleted is still marked as archived; the
+        // condition above alone decides about those.
+        including.archived
+          ? undefined
+          : or(
+              isNull(hubArchivedCards.archivedAt),
+              isNotNull(hubArchivedCards.autoDeletedAt),
+            ),
         boardVisibleTo(db, viewerId),
       ),
     );
@@ -182,18 +223,31 @@ export async function listTaskRows(
   const assigneesByCard = groupBy(assignees, (row) => row.cardId);
   const labelsByCard = groupBy(cardLabels, (row) => row.cardId);
 
-  return rows.map(({ id, ...row }) => ({
-    ...row,
-    assignees: (assigneesByCard.get(id) ?? []).map((a) => ({
-      userId: a.userId,
-      // Someone invited but not registered yet has no name: show the address.
-      name: a.name?.trim() ? a.name : a.email,
-    })),
-    labels: (labelsByCard.get(id) ?? []).map(({ name, colourCode }) => ({
-      name,
-      colourCode,
-    })),
-  }));
+  return rows.map(
+    ({
+      id,
+      deletedAt,
+      archivedAt,
+      archivedAutomatically,
+      autoDeletedAt,
+      ...row
+    }) => ({
+      ...row,
+      archive: archivedAt
+        ? { at: archivedAt, automatic: archivedAutomatically ?? false }
+        : null,
+      autoDeleted: deletedAt !== null && autoDeletedAt !== null,
+      assignees: (assigneesByCard.get(id) ?? []).map((a) => ({
+        userId: a.userId,
+        // Someone invited but not registered yet has no name: show the address.
+        name: a.name?.trim() ? a.name : a.email,
+      })),
+      labels: (labelsByCard.get(id) ?? []).map(({ name, colourCode }) => ({
+        name,
+        colourCode,
+      })),
+    }),
+  );
 }
 
 /**
@@ -221,8 +275,8 @@ export interface BoardWithLists {
   publicId: string;
   name: string;
   projectId: number;
-  /** Live lists, left to right. */
-  lists: { publicId: string; name: string }[];
+  /** Live lists, left to right, with Kan's index for each. */
+  lists: { publicId: string; name: string; index: number }[];
 }
 
 /**
@@ -245,6 +299,7 @@ export async function listBoardsWithLists(
       projectId: boards.workspaceId,
       listPublicId: lists.publicId,
       listName: lists.name,
+      listIndex: lists.index,
     })
     .from(boards)
     .leftJoin(lists, and(eq(lists.boardId, boards.id), isNull(lists.deletedAt)))
@@ -267,8 +322,12 @@ export async function listBoardsWithLists(
       projectId: row.projectId,
       lists: [],
     };
-    if (row.listPublicId && row.listName !== null) {
-      board.lists.push({ publicId: row.listPublicId, name: row.listName });
+    if (row.listPublicId && row.listName !== null && row.listIndex !== null) {
+      board.lists.push({
+        publicId: row.listPublicId,
+        name: row.listName,
+        index: row.listIndex,
+      });
     }
     byBoard.set(row.boardId, board);
   }

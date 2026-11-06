@@ -33,7 +33,11 @@ function AuditContent() {
                   {format(entry.at, "yyyy-MM-dd HH:mm")}
                 </td>
                 <td className={tableClass.td}>
-                  {entry.actorEmail === "cli" ? "命令行" : entry.actorEmail}
+                  {entry.actorEmail === "cli"
+                    ? "命令行"
+                    : entry.actorEmail === "auto-tidy"
+                      ? "自动清理"
+                      : entry.actorEmail}
                 </td>
                 <td className={tableClass.td}>
                   {entry.summary}

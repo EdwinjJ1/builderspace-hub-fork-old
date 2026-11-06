@@ -81,7 +81,12 @@
     {
       "file": "packages/api/src/routers/board.ts",
       "marker": "hub-seam",
-      "why": "Only project admins may create templates; a project's board list leaves out other people's 仅自己可见 boards."
+      "why": "Only project admins may create templates; a project's board list leaves out other people's 仅自己可见 boards; a board page leaves out the cards in 归档."
+    },
+    {
+      "file": "packages/db/src/repository/board.repo.ts",
+      "marker": "hub-seam",
+      "why": "The two board queries take an optional list of cards to leave out, so cards in 归档 never reach a board page."
     },
     {
       "file": "packages/api/src/trpc.ts",

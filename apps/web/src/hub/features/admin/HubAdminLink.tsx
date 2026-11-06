@@ -20,7 +20,7 @@ const linkClass =
 /**
  * The Hub's own sidebar links, rendered once under Kan's navigation: 文档,
  * 表单 and MCP for every member, 后台 for back-office members and for those with
- * website access (who land in the 官网 section). They live in one component so the
+ * website or mailbox access (who land in the 官网 section). They live in one component so the
  * sidebar needs a single registered edit (docs/hub/UPSTREAM_SEAMS.md).
  */
 export function HubAdminLink({
@@ -36,7 +36,13 @@ export function HubAdminLink({
     staleTime: 60_000,
   });
   const role = me.data?.role ?? null;
-  const showAdmin = can(role, "admin.view") || Boolean(me.data?.siteAccess);
+  const access = {
+    role,
+    siteAccess: me.data?.siteAccess ?? null,
+    mailAccess: me.data?.mailAccess ?? false,
+  };
+  const showAdmin =
+    can(role, "admin.view") || Boolean(access.siteAccess) || access.mailAccess;
 
   return (
     <>
@@ -82,7 +88,7 @@ export function HubAdminLink({
       </Link>
       {showAdmin && (
         <Link
-          href={adminHome(role)}
+          href={adminHome(access)}
           onClick={onCloseSideNav}
           title={copy.admin.entry}
           className={twMerge(

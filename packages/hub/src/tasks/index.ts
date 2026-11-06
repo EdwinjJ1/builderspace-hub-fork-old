@@ -15,6 +15,8 @@ export {
   taskViews,
 } from "./task.policy";
 export type {
+  ArchivedTask,
+  ArchivedTasks,
   BoardTarget,
   HomeSummary,
   ProjectAccess,
@@ -25,6 +27,7 @@ export type {
   TaskColumn,
 } from "./task.service";
 export {
+  getArchivedTasks,
   getHome,
   getMyTasks,
   getVisibleTasks,

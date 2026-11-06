@@ -198,6 +198,26 @@ function RecentList({ archive }: { archive: Archive }) {
 
 function FinishedRow({ item }: { item: Finished }) {
   const open = useOpenTask(item.task);
+  const body = (
+    <>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-light-1000 dark:text-dark-1000">
+          {item.task.title}
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-light-900 dark:text-dark-900">
+          {taskWhere(item.task)}
+          {item.task.deleted && ` · ${text.recent.deleted}`}
+        </span>
+      </span>
+      <span className="shrink-0 text-xs tabular-nums text-light-900 dark:text-dark-900">
+        {dayFormat.format(item.finishedAt)}
+      </span>
+    </>
+  );
+  // The clean-up deleted its card: still counted, but there is nothing to open.
+  if (item.task.deleted) {
+    return <li className="flex w-full items-center gap-3 px-3 py-2">{body}</li>;
+  }
   return (
     <li>
       <button
@@ -205,17 +225,7 @@ function FinishedRow({ item }: { item: Finished }) {
         onClick={open}
         className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-light-200 dark:hover:bg-dark-200"
       >
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-light-1000 dark:text-dark-1000">
-            {item.task.title}
-          </span>
-          <span className="mt-0.5 block truncate text-xs text-light-900 dark:text-dark-900">
-            {taskWhere(item.task)}
-          </span>
-        </span>
-        <span className="shrink-0 text-xs tabular-nums text-light-900 dark:text-dark-900">
-          {dayFormat.format(item.finishedAt)}
-        </span>
+        {body}
       </button>
     </li>
   );

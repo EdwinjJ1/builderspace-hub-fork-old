@@ -29,6 +29,7 @@ export type AuditAction =
   | "account.project_role_changed"
   | "account.project_removed"
   | "account.site_access_changed"
+  | "account.mail_access_changed"
   | "department.created"
   | "department.renamed"
   | "department.reordered"
@@ -70,7 +71,11 @@ export type AuditAction =
   | "form.manager_removed"
   | "form_response.deleted"
   | "mcp.connected"
-  | "mcp.disconnected";
+  | "mcp.disconnected"
+  | "task.archived"
+  | "task.restored"
+  | "task.auto_archived"
+  | "task.auto_deleted";
 
 export interface AuditActor {
   userId: string | null;
@@ -79,6 +84,9 @@ export interface AuditActor {
 
 /** The actor for changes made from the operations command line. */
 export const CLI_ACTOR: AuditActor = { userId: null, email: "cli" };
+
+/** The actor for what the 归档 clean-up does on its own. */
+export const TIDY_ACTOR: AuditActor = { userId: null, email: "auto-tidy" };
 
 export interface AuditEntry {
   actor: AuditActor;

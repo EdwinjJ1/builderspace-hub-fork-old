@@ -621,6 +621,8 @@ export const zh = {
     move: {
       noList: (board: string, stage: string) =>
         `「${board}」看板没有「${stage}」列，没法移过去。`,
+      cannotAddList: (board: string, stage: string) =>
+        `「${board}」看板没有「${stage}」列，你也没有给它加列的权限，没法移过去。`,
       failed: "没有移动成功，已恢复原样。",
     },
     dueEdit: "改截止日期",
@@ -636,6 +638,40 @@ export const zh = {
       seeMine: "查看我的任务",
       close: "关闭",
     },
+    cardMenu: {
+      label: "更多操作",
+      archive: "归档",
+      delete: "删除",
+      confirmDelete: "删除后不能恢复，确定吗？",
+      confirm: "确定删除",
+      cancel: "取消",
+    },
+    archived: {
+      link: "归档",
+      linkHint: (days: number) => `完成满 ${days} 天的任务会自动移到归档`,
+      doneHint: (days: number) => `完成满 ${days} 天自动归档`,
+      moved: "已移到归档。",
+      undo: "撤销",
+      close: "关闭",
+      archiveFailed: "没有归档成功，已恢复原样。",
+      deleted: "已删除。",
+      deleteFailed: "没有删除成功，已恢复原样。",
+      restoreFailed: "没有恢复成功。",
+    },
+  },
+
+  archivedTasks: {
+    title: "归档",
+    description: (archiveDays: number, deleteDays: number) =>
+      `完成满 ${archiveDays} 天的任务会自动移到这里，也可以在总版的卡片上手动归档。在归档里放满 ${deleteDays} 天会自动删除，「我完成的」里的记录不受影响。`,
+    back: "回到总版",
+    empty: "归档里没有任务。",
+    archivedOn: (date: string, automatic: boolean) =>
+      automatic ? `${date} 自动归档` : `${date} 归档`,
+    deletesIn: (days: number) =>
+      days <= 0 ? "即将删除" : days === 1 ? "1 天后删除" : `${days} 天后删除`,
+    restore: "恢复",
+    delete: "删除",
   },
 
   boardVisibility: {
@@ -775,6 +811,7 @@ export const zh = {
       limited: (shown: number, total: number) =>
         `只列出最近 ${shown} 个，统计数字包含全部 ${total} 个。`,
       empty: "还没有完成的任务。卡片移到「已完成」后会自动出现在这里。",
+      deleted: "已从归档清理",
     },
   },
 
@@ -820,6 +857,9 @@ export const zh = {
       openTask: "打开任务",
       taskNote: "标题和状态跟着任务走，要改请到看板里改。",
       finished: "任务已完成",
+      cleanedUp: "已从归档清理",
+      cleanedUpNote:
+        "这个任务在归档里放满了天数，已经自动删除；这段时间仍然留着。",
     },
     saving: "正在保存…",
   },
@@ -1070,6 +1110,11 @@ export const zh = {
       siteHint:
         "能不能查看和处理官网上提交的数据，和后台角色无关。名单：看志愿者申请和加入登记，改志愿者的状态和备注；管理：在名单之外还能审核项目卡和项目进展。只有所有者能设置。",
       siteNone: "无",
+      mailHeading: "邮箱权限",
+      mailHint:
+        "能不能在 官网 → 邮箱 里看发到 hello@builderspace.dev 的信，和后台角色、官网权限都无关。只有所有者能设置。",
+      mailNone: "无",
+      mailRead: "可查看",
       departmentsHeading: "部门",
       departmentsHint:
         "这个人在各个项目里属于哪些部门，可以多选。部门名单在「部门」页维护。",
@@ -1270,6 +1315,40 @@ export const zh = {
           createdAt: "登记时间",
         },
         empty: "还没有人登记",
+      },
+      inbox: {
+        title: "邮箱",
+        description:
+          "发到 hello@builderspace.dev 的信，从 Resend 读取，保留 30 天。",
+        noAccess: {
+          heading: "没有邮箱权限",
+          body: "社团邮箱只对被所有者授予了邮箱权限的人开放。如果你需要，请联系所有者。",
+        },
+        notConnected: {
+          heading: "还没有连接邮箱",
+          body: "部署环境里还没有设置 HUB_RESEND_INBOX_API_KEY，连接方法见仓库的 BUILDERSPACE.md。",
+        },
+        empty: "还没有收到信",
+        noSubject: "（无主题）",
+        pick: "选一封信查看",
+        newer: "较新",
+        older: "较旧",
+        refresh: "刷新",
+        from: "发件人",
+        to: "收件人",
+        cc: "抄送",
+        replyTo: "回复到",
+        receivedAt: "收到于",
+        attachments: "附件",
+        hasAttachments: (count: number) => `${count} 个附件`,
+        html: "网页",
+        text: "纯文本",
+        showImages: "显示远程图片",
+        imagesHidden: "远程图片没有加载：加载会让发件人知道这封信被打开了。",
+        noBody: "这封信没有正文",
+        frameTitle: "邮件正文",
+        suspicious:
+          "这封信没通过发件域名的验证（DMARC），可能是冒充的，别点里面的链接。",
       },
       export: "导出表格",
       exporting: "正在导出…",
