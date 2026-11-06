@@ -12,6 +12,7 @@ import {
   useFunctionColors,
 } from "~/hub/lib/use-function-colors";
 import { useOpenInProject } from "~/hub/lib/use-open-in-project";
+import { CardMenu } from "./CardMenu";
 import { DueBadge, Labels, taskWhere } from "./task-display";
 
 const text = copy.tasks;
@@ -61,18 +62,25 @@ function Assignees({ names, mine }: { names: string[]; mine: boolean }) {
 /**
  * One task on the overall board. Its left edge and tag take the colour of its
  * function. When the person may edit tasks in its project it can be dragged
- * to another column and its due date changed here; either change lands on the
- * task's own board, because it is the same card.
+ * to another column, its due date changed and the task put in 归档 here, and
+ * deleted where they may delete; every change lands on the task's own board,
+ * because it is the same card.
  */
 export function BoardCard({
   task,
   canEdit,
   onSetDue,
+  onArchive,
+  onDelete,
   isOverlay = false,
 }: {
   task: HubTask;
   canEdit: boolean;
   onSetDue: (task: HubTask, dueDate: Date | null) => void;
+  /** Left out where the person may not put the task in 归档. */
+  onArchive?: (task: HubTask) => void;
+  /** Left out where the person may not delete the task. */
+  onDelete?: (task: HubTask) => void;
   isOverlay?: boolean;
 }) {
   const colors = useFunctionColors();
@@ -112,11 +120,17 @@ export function BoardCard({
         style={{ backgroundColor: color }}
       />
       <span
-        className="inline-block rounded px-1.5 text-[11px] font-medium leading-5"
+        className="inline-block max-w-[calc(100%-1.75rem)] truncate rounded px-1.5 align-top text-[11px] font-medium leading-5"
         style={{ backgroundColor: tint(color, 0.14), color }}
       >
         {taskWhere(task)}
       </span>
+      {!isOverlay && (
+        <CardMenu
+          onArchive={onArchive && (() => onArchive(task))}
+          onDelete={onDelete && (() => onDelete(task))}
+        />
+      )}
       <span className="mt-1 block text-sm font-medium leading-5 text-light-1000 dark:text-dark-1000">
         {task.title}
       </span>

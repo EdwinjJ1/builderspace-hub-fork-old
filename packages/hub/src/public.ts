@@ -41,6 +41,11 @@ export {
   taskViews,
 } from "./tasks/task.policy";
 
+export {
+  ARCHIVE_AFTER_DAYS,
+  DELETE_AFTER_DAYS,
+} from "./archived-tasks/archived-task.policy";
+
 export type { EditableProjectRole } from "./permissions/permission.policy";
 export {
   editableProjectRoles,

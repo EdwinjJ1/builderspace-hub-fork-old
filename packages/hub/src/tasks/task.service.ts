@@ -1,7 +1,11 @@
 import { hubStructure } from "@kan/builderspace/structure";
 
 import type { Db } from "../db";
-import type { TaskRow, ViewableProject } from "../kan/tasks.gateway";
+import type {
+  TaskRow,
+  TaskRowsIncluding,
+  ViewableProject,
+} from "../kan/tasks.gateway";
 import type {
   DueState,
   FunctionKey,
@@ -9,6 +13,7 @@ import type {
   TaskView,
   TileCounts,
 } from "./task.policy";
+import { deletesAt } from "../archived-tasks/archived-task.policy";
 import {
   listBoardsWithLists,
   listTaskRows,
@@ -56,6 +61,15 @@ export interface Task {
   /** Display names of the people the task is assigned to. */
   assignees: string[];
   assignedToMe: boolean;
+  /** In 归档 since then, off every board; null while it is on its board. */
+  archivedAt: Date | null;
+  /** Deleted by the clean-up after its time in 归档; only 我完成的 lists it. */
+  deleted: boolean;
+  /**
+   * Whether this person may delete it, by Kan's rule for `card.delete`: the
+   * project's `card:delete` permission, or they created the card.
+   */
+  canDelete: boolean;
 }
 
 export interface Scope {
@@ -82,6 +96,7 @@ export interface TaskColumn {
 /** What the person may do with tasks in one project of the scope. */
 export interface ProjectAccess {
   canCreate: boolean;
+  /** Move, change, put in 归档 and bring back. Deleting is per task. */
   canEdit: boolean;
   /**
    * May add a list to a board: moving a task into a column its board has no
@@ -121,10 +136,17 @@ export interface TaskBoard {
   boards: BoardTarget[];
 }
 
-/** A task plus the date it is ordered by; never leaves this module. */
-type LoadedTask = Task & { sortDate: Date };
+/** A task plus what only this module uses; never leaves it as is. */
+type LoadedTask = Task & {
+  sortDate: Date;
+  archive: TaskRow["archive"];
+};
 
-function publicTask({ sortDate: _sortDate, ...task }: LoadedTask): Task {
+function publicTask({
+  sortDate: _sortDate,
+  archive: _archive,
+  ...task
+}: LoadedTask): Task {
   return task;
 }
 
@@ -155,25 +177,36 @@ export async function getHome(db: Db, input: ScopeInput): Promise<HomeSummary> {
 
 /**
  * Every task assigned to this person in the projects they can see, finished
- * ones included. The personal calendar plans against this list, so a task they
- * were taken off or a project they left drops out of it.
+ * ones, those in 归档 and those the clean-up deleted from it included. The
+ * personal calendar plans against this list, so a task they were taken off or
+ * a project they left drops out of it, while time already spent on a task
+ * stays when the task goes to 归档 and after it is cleaned up.
  */
 export async function getMyTasks(
   db: Db,
   input: { userId: string; now: Date },
 ): Promise<Task[]> {
-  return (await getVisibleTasks(db, input)).filter((task) => task.assignedToMe);
+  const { tasks } = await loadScope(db, input, {
+    archived: true,
+    autoDeleted: true,
+  });
+  return tasks.filter((task) => task.assignedToMe).map(publicTask);
 }
 
 /**
- * Every task in every project this person can see, whoever it belongs to.
- * "我完成的" needs it to credit unassigned tasks to whoever finished them.
+ * Every task in every project this person can see, whoever it belongs to,
+ * including those in 归档 and those the clean-up deleted from it. "我完成的"
+ * needs it to credit unassigned tasks to whoever finished them, and to keep
+ * counting finished work after the boards have let go of it.
  */
 export async function getVisibleTasks(
   db: Db,
   input: { userId: string; now: Date },
 ): Promise<Task[]> {
-  const { tasks } = await loadScope(db, input);
+  const { tasks } = await loadScope(db, input, {
+    archived: true,
+    autoDeleted: true,
+  });
   return tasks.map(publicTask);
 }
 
@@ -245,24 +278,75 @@ export async function getTaskBoard(
     view: input.view,
     onlyMine,
     columns,
-    access: Object.fromEntries(
-      inScope.map((project) => [
-        project.publicId,
-        {
-          canCreate: project.canCreateTasks,
-          canEdit: project.canEditTasks,
-          canAddLists: project.canCreateLists,
-          memberPublicId: project.memberPublicId,
-        },
-      ]),
-    ),
+    access: accessTo(inScope),
     boards: boards.sort(byTeamOrder(inScope)),
   };
+}
+
+/** A task in 归档, with when it went there and when it will be deleted. */
+export interface ArchivedTask extends Task {
+  archivedAt: Date;
+  /** It went on its own, after it had been finished for a while. */
+  automatic: boolean;
+  deletesAt: Date;
+}
+
+export interface ArchivedTasks {
+  scope: Scope;
+  /** Most recently archived first. */
+  tasks: ArchivedTask[];
+  /** Keyed by project public id; only projects in scope. */
+  access: Record<string, ProjectAccess>;
+}
+
+/** What is in 归档, across the scope, for the people who can see it. */
+export async function getArchivedTasks(
+  db: Db,
+  input: ScopeInput,
+): Promise<ArchivedTasks> {
+  const { scope, tasks, inScope } = await loadScope(db, input, {
+    archived: true,
+  });
+  return {
+    scope,
+    tasks: tasks
+      .flatMap((task) =>
+        task.archive
+          ? [
+              {
+                ...publicTask(task),
+                archivedAt: task.archive.at,
+                automatic: task.archive.automatic,
+                deletesAt: deletesAt(task.archive.at),
+              },
+            ]
+          : [],
+      )
+      .sort((a, b) => b.archivedAt.getTime() - a.archivedAt.getTime()),
+    access: accessTo(inScope),
+  };
+}
+
+function accessTo(
+  projects: readonly ViewableProject[],
+): Record<string, ProjectAccess> {
+  return Object.fromEntries(
+    projects.map((project) => [
+      project.publicId,
+      {
+        canCreate: project.canCreateTasks,
+        canEdit: project.canEditTasks,
+        canAddLists: project.canCreateLists,
+        memberPublicId: project.memberPublicId,
+      },
+    ]),
+  );
 }
 
 async function loadScope(
   db: Db,
   input: ScopeInput,
+  including: TaskRowsIncluding = {},
 ): Promise<{
   scope: Scope;
   tasks: LoadedTask[];
@@ -282,8 +366,9 @@ async function loadScope(
     db,
     inScope.map((project) => project.id),
     input.userId,
+    including,
   );
-  const chips = new Map(inScope.map((p) => [p.id, toChip(p)]));
+  const byId = new Map(inScope.map((p) => [p.id, p]));
 
   return {
     inScope,
@@ -292,7 +377,7 @@ async function loadScope(
       current: current ? toChip(current) : null,
     },
     tasks: rows.flatMap((row) => {
-      const project = chips.get(row.projectId);
+      const project = byId.get(row.projectId);
       return project ? [toTask(row, project, input.userId, input.now)] : [];
     }),
   };
@@ -300,7 +385,7 @@ async function loadScope(
 
 function toTask(
   row: TaskRow,
-  project: ProjectChip,
+  project: ViewableProject,
   userId: string,
   now: Date,
 ): LoadedTask {
@@ -311,13 +396,20 @@ function toTask(
     dueState: dueStateOf(row.dueDate, now),
     stage: stageOf(row.listName),
     functionKey: functionKeyOf(row.boardName),
-    project,
+    project: toChip(project),
     board: { publicId: row.boardPublicId, name: row.boardName },
     listName: row.listName,
     labels: row.labels,
     assignees: row.assignees.map((assignee) => assignee.name),
     assignedToMe: row.assignees.some((assignee) => assignee.userId === userId),
+    archivedAt: row.archive?.at ?? null,
+    deleted: row.autoDeleted,
+    canDelete:
+      !row.autoDeleted &&
+      (project.canDeleteTasks ||
+        (row.createdBy !== null && row.createdBy === userId)),
     sortDate: row.updatedAt ?? row.createdAt,
+    archive: row.archive,
   };
 }
 

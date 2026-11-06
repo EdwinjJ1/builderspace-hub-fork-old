@@ -9,6 +9,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  notInArray, // hub-seam: cards in 归档 (docs/hub/UPSTREAM_SEAMS.md)
   or,
 } from "drizzle-orm";
 
@@ -156,6 +157,7 @@ export const getByPublicId = async (
     lists: string[];
     dueDate: DueDateFilter[];
     type: "regular" | "template" | undefined;
+    hiddenCardIds?: number[]; // hub-seam: cards in 归档
   },
 ) => {
   let cardIds: string[] = [];
@@ -333,6 +335,9 @@ export const getByPublicId = async (
               cardIds.length > 0 ? inArray(cards.publicId, cardIds) : undefined,
               isNull(cards.deletedAt),
               buildDueDateWhere(filters.dueDate),
+              filters.hiddenCardIds?.length // hub-seam: cards in 归档
+                ? notInArray(cards.id, filters.hiddenCardIds)
+                : undefined,
             ),
             orderBy: [asc(cards.index)],
           },
@@ -391,6 +396,7 @@ export const getBySlug = async (
     labels: string[];
     lists: string[];
     dueDate: DueDateFilter[];
+    hiddenCardIds?: number[]; // hub-seam: cards in 归档
   },
 ) => {
   let cardIds: string[] = [];
@@ -509,6 +515,9 @@ export const getBySlug = async (
               cardIds.length > 0 ? inArray(cards.publicId, cardIds) : undefined,
               isNull(cards.deletedAt),
               buildDueDateWhere(filters.dueDate),
+              filters.hiddenCardIds?.length // hub-seam: cards in 归档
+                ? notInArray(cards.id, filters.hiddenCardIds)
+                : undefined,
             ),
             orderBy: [asc(cards.index)],
           },

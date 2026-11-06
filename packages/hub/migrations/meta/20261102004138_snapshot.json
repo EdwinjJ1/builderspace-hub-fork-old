@@ -1,6 +1,6 @@
 {
   "id": "182c744b-b87d-450b-b266-0aafdbc2af92",
-  "prevId": "a46cb61a-c6b6-412d-8498-0506f8aa2362",
+  "prevId": "cadc1bef-a981-42d7-9b77-c78920c38d49",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -402,6 +402,83 @@
           "value": "\"hub_account\".\"status\" IN ('active', 'suspended')"
         }
       },
+      "isRLSEnabled": true
+    },
+    "public.hub_archived_card": {
+      "name": "hub_archived_card",
+      "schema": "",
+      "columns": {
+        "cardId": {
+          "name": "cardId",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "archivedAt": {
+          "name": "archivedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archivedBy": {
+          "name": "archivedBy",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "automatic": {
+          "name": "automatic",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "restoredAt": {
+          "name": "restoredAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "autoDeletedAt": {
+          "name": "autoDeletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "hub_archived_card_cardId_card_id_fk": {
+          "name": "hub_archived_card_cardId_card_id_fk",
+          "tableFrom": "hub_archived_card",
+          "tableTo": "card",
+          "columnsFrom": [
+            "cardId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "hub_archived_card_archivedBy_user_id_fk": {
+          "name": "hub_archived_card_archivedBy_user_id_fk",
+          "tableFrom": "hub_archived_card",
+          "tableTo": "user",
+          "columnsFrom": [
+            "archivedBy"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": true
     },
     "public.hub_audit_log": {

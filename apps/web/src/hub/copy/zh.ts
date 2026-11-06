@@ -617,6 +617,40 @@ export const zh = {
       seeMine: "查看我的任务",
       close: "关闭",
     },
+    cardMenu: {
+      label: "更多操作",
+      archive: "归档",
+      delete: "删除",
+      confirmDelete: "删除后不能恢复，确定吗？",
+      confirm: "确定删除",
+      cancel: "取消",
+    },
+    archived: {
+      link: "归档",
+      linkHint: (days: number) => `完成满 ${days} 天的任务会自动移到归档`,
+      doneHint: (days: number) => `完成满 ${days} 天自动归档`,
+      moved: "已移到归档。",
+      undo: "撤销",
+      close: "关闭",
+      archiveFailed: "没有归档成功，已恢复原样。",
+      deleted: "已删除。",
+      deleteFailed: "没有删除成功，已恢复原样。",
+      restoreFailed: "没有恢复成功。",
+    },
+  },
+
+  archivedTasks: {
+    title: "归档",
+    description: (archiveDays: number, deleteDays: number) =>
+      `完成满 ${archiveDays} 天的任务会自动移到这里，也可以在总版的卡片上手动归档。在归档里放满 ${deleteDays} 天会自动删除，「我完成的」里的记录不受影响。`,
+    back: "回到总版",
+    empty: "归档里没有任务。",
+    archivedOn: (date: string, automatic: boolean) =>
+      automatic ? `${date} 自动归档` : `${date} 归档`,
+    deletesIn: (days: number) =>
+      days <= 0 ? "即将删除" : days === 1 ? "1 天后删除" : `${days} 天后删除`,
+    restore: "恢复",
+    delete: "删除",
   },
 
   boardVisibility: {
@@ -756,6 +790,7 @@ export const zh = {
       limited: (shown: number, total: number) =>
         `只列出最近 ${shown} 个，统计数字包含全部 ${total} 个。`,
       empty: "还没有完成的任务。卡片移到「已完成」后会自动出现在这里。",
+      deleted: "已从归档清理",
     },
   },
 
@@ -801,6 +836,9 @@ export const zh = {
       openTask: "打开任务",
       taskNote: "标题和状态跟着任务走，要改请到看板里改。",
       finished: "任务已完成",
+      cleanedUp: "已从归档清理",
+      cleanedUpNote:
+        "这个任务在归档里放满了天数，已经自动删除；这段时间仍然留着。",
     },
     saving: "正在保存…",
   },

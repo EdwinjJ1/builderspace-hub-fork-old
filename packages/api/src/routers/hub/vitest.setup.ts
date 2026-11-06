@@ -1,5 +1,6 @@
 import { vi } from "vitest";
 
+import type * as ArchivedTasks from "./archived-tasks";
 import type * as PrivateBoards from "./private-boards";
 
 // Kan's integration tests boot an in-memory Postgres in each `beforeEach`
@@ -45,5 +46,22 @@ vi.mock("./private-boards", () => {
         throw new Error("vitest.setup: the private-board guard has not run");
       return real.boardsVisibleTo(...args);
     },
+  };
+});
+
+/** The same for 归档: on a stand-in database no card is archived. */
+vi.mock("./archived-tasks", () => {
+  const isRealDb = (db: unknown) =>
+    typeof (db as { select?: unknown } | null)?.select === "function";
+
+  return {
+    archivedCardIds: async (
+      ...args: Parameters<typeof ArchivedTasks.archivedCardIds>
+    ) =>
+      isRealDb(args[0])
+        ? (
+            await vi.importActual<typeof ArchivedTasks>("./archived-tasks")
+          ).archivedCardIds(...args)
+        : [],
   };
 });

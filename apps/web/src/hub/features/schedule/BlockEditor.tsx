@@ -121,6 +121,23 @@ function TaskSummary({ block }: { block: ScheduleBlock }) {
 
 function TaskLine({ task }: { task: NonNullable<ScheduleBlock["task"]> }) {
   const open = useOpenTask(task);
+  // The 归档 clean-up deleted its card: the time stays, but there is nothing
+  // to open.
+  if (task.deleted) {
+    return (
+      <div className="mt-2">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-semibold text-light-1000 dark:text-dark-1000">
+            {task.title}
+          </span>
+          <Pill tone="neutral">{text.editor.cleanedUp}</Pill>
+        </div>
+        <p className="mt-1 text-xs text-light-900 dark:text-dark-900">
+          {text.editor.cleanedUpNote}
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="mt-2">
       <div className="flex items-center gap-2">

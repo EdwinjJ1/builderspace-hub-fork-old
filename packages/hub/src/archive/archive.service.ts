@@ -1,7 +1,7 @@
-import type { Db } from "../db";
+import type { Db, DbOrTx } from "../db";
 import type { FunctionKey } from "../tasks/task.policy";
 import type { ProjectChip, Task } from "../tasks/task.service";
-import type { CardEvent } from "./archive.policy";
+import type { CardEvent, Completion } from "./archive.policy";
 import { cardCreationTimes, listFinishHistory } from "../kan/archive.gateway";
 import { HubError } from "../shared/errors";
 import { getVisibleTasks } from "../tasks";
@@ -86,10 +86,36 @@ async function whenFinished(
   done: Task[],
   userId: string,
 ): Promise<FinishedTask[]> {
-  const ids = done.map((task) => task.publicId);
+  const completions = await completionsOf(
+    db,
+    done.map((task) => task.publicId),
+  );
+
+  return done.flatMap((task) => {
+    const completion = completions.get(task.publicId);
+    if (!completion) return [];
+
+    const mine = countsForMe({
+      assignedToMe: task.assignedToMe,
+      hasAssignees: task.assignees.length > 0,
+      finishedBy: completion.by,
+      userId,
+    });
+    return mine ? [{ task, finishedAt: completion.at }] : [];
+  });
+}
+
+/**
+ * When and by whom each of these cards, all sitting in a finished column, was
+ * finished, read from their activity logs. Cards it cannot tell are left out.
+ */
+export async function completionsOf(
+  db: DbOrTx,
+  cardPublicIds: readonly string[],
+): Promise<Map<string, Completion>> {
   const [history, createdAt] = await Promise.all([
-    listFinishHistory(db, ids),
-    cardCreationTimes(db, ids),
+    listFinishHistory(db, cardPublicIds),
+    cardCreationTimes(db, cardPublicIds),
   ]);
 
   const eventsByCard = new Map<string, CardEvent[]>();
@@ -104,23 +130,17 @@ async function whenFinished(
     eventsByCard.set(row.cardPublicId, events);
   }
 
-  return done.flatMap((task) => {
-    const created = createdAt.get(task.publicId);
-    // A card with no usable history (imported, say) counts from its creation,
-    // but only for its assignees: nobody is known to have finished it.
-    const completion =
-      completionOf(eventsByCard.get(task.publicId) ?? []) ??
-      (created ? { at: created, by: null } : null);
-    if (!completion) return [];
-
-    const mine = countsForMe({
-      assignedToMe: task.assignedToMe,
-      hasAssignees: task.assignees.length > 0,
-      finishedBy: completion.by,
-      userId,
-    });
-    return mine ? [{ task, finishedAt: completion.at }] : [];
-  });
+  return new Map(
+    cardPublicIds.flatMap((publicId) => {
+      const created = createdAt.get(publicId);
+      // A card with no usable history (imported, say) counts from its creation,
+      // but only for its assignees: nobody is known to have finished it.
+      const completion =
+        completionOf(eventsByCard.get(publicId) ?? []) ??
+        (created ? { at: created, by: null } : null);
+      return completion ? [[publicId, completion] as const] : [];
+    }),
+  );
 }
 
 function countByProject(

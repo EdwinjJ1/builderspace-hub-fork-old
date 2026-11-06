@@ -24,6 +24,11 @@ import {
   suspendAccount,
 } from "@kan/hub/accounts";
 import { getArchive } from "@kan/hub/archive";
+import {
+  archiveTask,
+  restoreTask,
+  tidyBeforeShowingTasks,
+} from "@kan/hub/archived-tasks";
 import { countAudit, listAudit } from "@kan/hub/audit";
 import {
   addProjectRepo,
@@ -66,7 +71,12 @@ import { getFunctionColors, setFunctionColors } from "@kan/hub/settings";
 import { HubError } from "@kan/hub/shared";
 import { siteAccessLevels } from "@kan/hub/site";
 import { listProjects } from "@kan/hub/structure";
-import { getHome, getTaskBoard, taskViews } from "@kan/hub/tasks";
+import {
+  getArchivedTasks,
+  getHome,
+  getTaskBoard,
+  taskViews,
+} from "@kan/hub/tasks";
 
 import { createTRPCRouter } from "../../trpc";
 import { departmentsRouter } from "./departments";
@@ -280,17 +290,26 @@ const permissionsRouter = createTRPCRouter({
 /** 全部 when `project` is left out, otherwise one project the caller is in. */
 const scopeInput = z.object({ project: z.string().min(1).max(32).optional() });
 
+/** A task, by its card's public id. */
+const taskInput = z.object({ cardPublicId: z.string().min(1).max(32) });
+
+/**
+ * The pages that show tasks run the 归档 clean-up first (at most once an
+ * hour; there is no scheduler), so they never show what it would put away.
+ */
 const tasksRouter = createTRPCRouter({
   /** The home page: tile counts, my open tasks, the project × function grid. */
-  home: hubProcedure.input(scopeInput).query(({ ctx, input }) =>
-    runHub(() =>
+  home: hubProcedure.input(scopeInput).query(async ({ ctx, input }) => {
+    const now = new Date();
+    await tidyBeforeShowingTasks(ctx.db, now);
+    return runHub(() =>
       getHome(ctx.db, {
         userId: ctx.actor.userId,
         projectPublicId: input.project,
-        now: new Date(),
+        now,
       }),
-    ),
-  ),
+    );
+  }),
 
   /**
    * The cross-project task board for one view, split into columns.
@@ -303,16 +322,45 @@ const tasksRouter = createTRPCRouter({
         onlyMine: z.boolean().optional(),
       }),
     )
-    .query(({ ctx, input }) =>
-      runHub(() =>
+    .query(async ({ ctx, input }) => {
+      const now = new Date();
+      await tidyBeforeShowingTasks(ctx.db, now);
+      return runHub(() =>
         getTaskBoard(ctx.db, {
           userId: ctx.actor.userId,
           projectPublicId: input.project,
           view: input.view,
           onlyMine: input.onlyMine,
-          now: new Date(),
+          now,
         }),
-      ),
+      );
+    }),
+
+  /** 归档: what is in it across the scope, newest first. */
+  archived: hubProcedure.input(scopeInput).query(async ({ ctx, input }) => {
+    const now = new Date();
+    await tidyBeforeShowingTasks(ctx.db, now);
+    return runHub(() =>
+      getArchivedTasks(ctx.db, {
+        userId: ctx.actor.userId,
+        projectPublicId: input.project,
+        now,
+      }),
+    );
+  }),
+
+  /** Puts a task in 归档. Deleting one goes through Kan's `card.delete`. */
+  archive: hubProcedure
+    .input(taskInput)
+    .mutation(({ ctx, input }) =>
+      runHub(() => archiveTask(ctx.db, ctx.actor, input, new Date())),
+    ),
+
+  /** Brings a task back from 归档 to its board. */
+  restore: hubProcedure
+    .input(taskInput)
+    .mutation(({ ctx, input }) =>
+      runHub(() => restoreTask(ctx.db, ctx.actor, input, new Date())),
     ),
 });
 

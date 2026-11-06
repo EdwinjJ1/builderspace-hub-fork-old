@@ -16,6 +16,10 @@
       "types": "./src/archive/index.ts",
       "default": "./src/archive/index.ts"
     },
+    "./archived-tasks": {
+      "types": "./src/archived-tasks/index.ts",
+      "default": "./src/archived-tasks/index.ts"
+    },
     "./audit": {
       "types": "./src/audit/index.ts",
       "default": "./src/audit/index.ts"

@@ -51,6 +51,11 @@ export function taskBoardHref(
   return `${path}${separator}${onlyMineParam.name}=${onlyMineParam.value}`;
 }
 
+/** 归档, scoped like the task board. */
+export function archivedTasksHref(projectPublicId?: string | null): string {
+  return withProject("/tasks/archived", projectPublicId);
+}
+
 export function cardHref(cardPublicId: string): string {
   return `/cards/${cardPublicId}`;
 }
